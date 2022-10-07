@@ -1,8 +1,7 @@
 use crate::errors::AsmValidationError;
 
 
-// Takes a line of assembly code, for example `ADD $g0, $zero, $g1`, and returns an `Err` if it
-// is not valid Iridium assembly.
+/// Takes a line of assembly code, for example `ADD $g0, $zero, $g1`, and returns an `Err` if it is not valid Iridium assembly.
 pub fn validate_asm_line(line:&str) -> Result<(), AsmValidationError> {
     validate_label(line)?;
 
@@ -16,7 +15,7 @@ pub fn validate_asm_line(line:&str) -> Result<(), AsmValidationError> {
 }
 
 
-// Takes a line of assembly, extracts the opcode from it, and checks that it is a valid opcode. If an invalid opcode is found, an `AsmValidationError` will be thrown.
+/// Takes a line of assembly, extracts the opcode from it, and checks that it is a valid opcode. If an invalid opcode is found, an `AsmValidationError` will be thrown.
 fn validate_opcode(line:&str) -> Result<&str, AsmValidationError> {
     let valid_opcodes:[&str;27] = [
         "ADD", "SUB", "ADDI", "SUBI", "SLL", "SRL", "SRA", "NAND", "OR", "ADDC", "SUBC",
@@ -41,20 +40,25 @@ fn validate_opcode(line:&str) -> Result<&str, AsmValidationError> {
 }
 
 
-// gets operands from a string using the assumption that the first operand will always be a register, or there will be no operands at all
-fn get_operands_from_line(line:&str) -> Vec<&str> {
-    let operands:Vec<&str> = Vec::new();
-    if !line.contains("$") {
-        return operands;
-    }
+/// Gets operands from a string by removing the operand and any comments and labels, and then split it up using commas
+fn get_operands_from_line<'a>(line:&'a str, opcode:&str) -> Vec<String> {    
+    let opcode_start_index = line.find(opcode).expect(&format!("Could not find opcode {} in line {}", opcode, line));
+    let opcode_end_index = opcode_start_index + opcode.len();
+    let comment_start_index = line.find(";").unwrap_or(line.len());
+
+    let operands_section = line[opcode_end_index..comment_start_index].to_owned();
+    let operands:Vec<String> = operands_section.split(",")
+                                    .map(|operand| operand.trim().to_owned())
+                                    .filter(|operand| operand != "")
+                                    .collect();
 
     operands
 }
 
 
-// Takes a line of assembly and the associated opcode (which should already be validated), and checks that the operands are valid
+/// Takes a line of assembly and the associated opcode (which should already be validated), and checks that the operands are valid
 fn validate_operands(line:&str, opcode:&str) -> Result<(), AsmValidationError> {
-    let operands = get_operands_from_line(line);
+    let operands = get_operands_from_line(line, opcode);
     match opcode {
         "ADD" | "SUB" | "NAND" | "OR" | "LOAD" | "STORE" => { // require 3 registers
 
@@ -93,7 +97,7 @@ fn validate_operands(line:&str, opcode:&str) -> Result<(), AsmValidationError> {
 }
 
 
-// Takes a line of assembly and checks if it contains a label and, if it does, checks that the label is valid - if not, the function will return an error.
+/// Takes a line of assembly and checks if it contains a label and, if it does, checks that the label is valid - if not, the function will return an error.
 fn validate_label(line:&str) -> Result<(), AsmValidationError> {
     let label = match line.find(":") {
         Some(index) => line[..index].to_owned(),
