@@ -56,7 +56,7 @@ fn get_operands_from_line<'a>(line:&'a str, opcode:&str) -> Vec<String> {
 }
 
 
-/// Checks that a given register string is a valid register and returns an AsmValidationError if not
+/// Checks that a given register string is a valid register and returns an `AsmValidationError` if not
 fn validate_register(register:&str) -> Result<(), AsmValidationError> {
     let valid_registers:[&str;16] = [
         "$zero", "$g0", "$g1", "$g2", "$g3", "$g4", "$g5", "$g6", "$g7", "$g8", "$g9",
@@ -71,13 +71,52 @@ fn validate_register(register:&str) -> Result<(), AsmValidationError> {
 }
 
 
+/// Checks that a given immediate is a valid immediate and returns an `AsmValidationError` if not. Will ensure 
+/// that immediate is within the range the given number of bits can handle, and is in a valid format given the 
+/// prefix (0x for hexadecimal and 0b for binary, no prefix for decimal).
+fn validate_immediate(operand:&str, bits:i16) -> Result<(), AsmValidationError> {
+    let immediate:i32;
+    if operand.starts_with("0b") {
+        immediate = match i32::from_str_radix(&operand[2..], 2) {
+            Ok(val) => val,
+            Err(_) => {
+                return Err(AsmValidationError(format!("Could not parse binary immediate {}", operand)));
+            }
+        }
+    } else if operand.starts_with("0x") {
+        immediate = match i32::from_str_radix(&operand[2..], 16) {
+            Ok(val) => val,
+            Err(_) => {
+                return Err(AsmValidationError(format!("Could not parse hexadecimal immediate {}", operand)));
+            }
+        }
+    } else {
+        immediate = match operand.parse() {
+            Ok(val) => val,
+            Err(_) => {
+                return Err(AsmValidationError(format!("Could not parse immediate {}", operand)));
+            }
+        }
+    }
+
+    let max_immediate = (2_i32.pow(bits.try_into().unwrap())) - 1;
+    if immediate < 0 {
+        return Err(AsmValidationError(format!("Immediate operand {} cannot be negative", operand))); 
+    } else if immediate > max_immediate {
+        return Err(AsmValidationError(format!("Immediate {} cannot fit into {} bits", operand, bits)));
+    }
+
+    Ok(())
+}
+
+
 /// Takes a line of assembly and the associated opcode (which should already be validated), and checks that the operands are valid
 fn validate_operands(line:&str, opcode:&str) -> Result<(), AsmValidationError> {
     let operands = get_operands_from_line(line, opcode);
     match opcode {
         "ADD" | "SUB" | "NAND" | "OR" | "LOAD" | "STORE" => { // require 3 registers
             if operands.len() != 3 {
-                return Err(AsmValidationError(format!("Too many operands on line {}", line)));
+                return Err(AsmValidationError(format!("Incorrect number of operands on line {}", line)));
             }
 
             validate_register(&operands[0])?;
@@ -85,20 +124,32 @@ fn validate_operands(line:&str, opcode:&str) -> Result<(), AsmValidationError> {
             validate_register(&operands[2])?;
         },
 
-        "ADDI" | "SUBI" | "SLL" | "SRL" | "SRA" => { // require 3 registers and an immediate
+        "ADDI" | "SUBI" | "SLL" | "SRL" | "SRA" => { // require 2 registers and an immediate
+            if operands.len() != 3 {
+                return Err(AsmValidationError(format!("Incorrect number of operands on line {}", line)));
+            }
 
+            validate_register(&operands[0])?;
+            validate_register(&operands[1])?;
+            validate_immediate(&operands[2], 4)?;
         },
 
         "ADDC" | "SUBC" | "JUMP" | "CMP" | "JAL" | "BEQ" | "BNE" | "BLT" | "BGT" | "IN" | "OUT" => { // require 2 registers
+            if operands.len() != 2 {
+                return Err(AsmValidationError(format!("Incorrect number of operands on line {}", line)));
+            }
 
+            validate_register(&operands[0])?;
+            validate_register(&operands[1])?;
         },
 
-        "MOVUI" => { // requires a register and a 16-bit immediate
+        "MOVUI" | "syscall" => { // requires a register and an 8-bit immediate
+            if operands.len() != 2 {
+                return Err(AsmValidationError(format!("Incorrect number of operands on line {}", line)));
+            }
 
-        },
-
-        "syscall" => { // requires a register and an 8-bit immediate
-
+            validate_register(&operands[0])?;
+            validate_immediate(&operands[1], 8)?;
         },
 
         "NOP" | "HALT" => { // no operands
@@ -222,9 +273,15 @@ mod tests {
         validate_asm_line("NOP $g0").unwrap();
     }
 
+    #[test]
+    #[should_panic]
+    fn test_wrong_number_of_operands() {
+        validate_asm_line("ADDC $g0, $g1, $g2").unwrap();
+    }
+
 
     #[test]
-    fn test_rrr_operand_instrs() {
+    fn test_rrr_format_instrs() {
         validate_asm_line("my_label: ADD $g0, $zero, $g1").unwrap();
         validate_asm_line("SUB $g1,$g2,$g3").unwrap();
         validate_asm_line("NAND $g4, $g5, $g6").unwrap();
@@ -239,5 +296,59 @@ mod tests {
     #[should_panic]
     fn test_rrr_invalid_operand() {
         validate_asm_line("ADD $g0, $q5, $g1").unwrap();
+    }
+
+
+    #[test]
+    fn test_rri_format_instrs() {
+        validate_asm_line("ADDI $g0, $zero, 5").unwrap();
+        validate_asm_line("SUBI $g0, $g1, 0x000A").unwrap();
+        validate_asm_line("SLL $g0, $g1, 0b1101").unwrap();
+        validate_asm_line("SRL $g2, $g3, 13").unwrap();
+        validate_asm_line("SRA $g3, $g4, 0x0004").unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_negative_immediate() {
+        validate_asm_line("ADDI $g0, $g1, -5").unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_too_large_immediate() {
+        validate_asm_line("ADDI $g0, $g1, 0xFFFF").unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_malformed_immediate() {
+        validate_asm_line("ADDI $g0, $g1, 1q").unwrap();
+    }
+
+
+    #[test]
+    fn test_rro_format_instrs() {
+        validate_asm_line("ADDC $g0, $g1").unwrap();
+        validate_asm_line("SUBC $g0, $g1").unwrap();
+        validate_asm_line("JUMP $g0, $g1").unwrap();
+        validate_asm_line("CMP $g0, $g1").unwrap();
+        validate_asm_line("JAL $g0, $g1").unwrap();
+        validate_asm_line("BEQ $g0, $g1").unwrap();
+        validate_asm_line("BNE $g0, $g1").unwrap();
+        validate_asm_line("BLT $g0, $g1").unwrap();
+        validate_asm_line("BGT $g0, $g1").unwrap();
+        validate_asm_line("IN $g0, $g1").unwrap();
+        validate_asm_line("OUT $g0, $g1").unwrap();
+    }
+
+
+    #[test]
+    fn test_ri_format_instrs() {
+        validate_asm_line("MOVUI $g0, 200").unwrap();
+        validate_asm_line("syscall $g0, 254").unwrap();
     }
 }
