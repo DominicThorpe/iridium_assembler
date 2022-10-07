@@ -2,16 +2,46 @@ use crate::errors::AsmValidationError;
 
 
 /// Takes a line of assembly code, for example `ADD $g0, $zero, $g1`, and returns an `Err` if it is not valid Iridium assembly.
-pub fn validate_asm_line(line:&str) -> Result<(), AsmValidationError> {
+pub fn validate_asm_line(line:&str, data_mode:bool) -> Result<(), AsmValidationError> {
     validate_label(line)?;
 
     // validate if the line is not just a label
     if !line.ends_with(":") {
-        let opcode = validate_opcode(line)?;
-        validate_operands(line, opcode)?;
+        if !data_mode {
+            let opcode = validate_opcode(line)?;
+            validate_operands(line, opcode)?;
+        } else {
+            let data_type = validate_data_type(line)?;
+            println!("Datatype: {}", data_type);
+        }
     }
 
     Ok(())
+}
+
+
+/// Takes a line of assembly and removes any label there may be
+fn remove_label(line:&str) -> &str {
+    match line.find(":") {
+        Some(index) => {
+            let label_removed = &line[index+1..].trim();
+            label_removed.split(" ").collect::<Vec<&str>>()[0]
+        },
+        None => line.split(" ").collect::<Vec<&str>>()[0],
+    }
+}
+
+
+/// Takes a line of assembly and checks if it is a valid data instruction, such as .text or .float. Returns an `AsmValidationErr` if there is no valid data type, and 
+/// returns the data type if there is.
+fn validate_data_type(line:&str) -> Result<&str, AsmValidationError> {
+    let valid_data_types:[&str;7] = [".int", ".long", ".half", ".float", ".section", ".char", ".text"];
+    let data_type = remove_label(line).split(" ").collect::<Vec<&str>>()[0];
+    if !valid_data_types.contains(&data_type) {
+        return Err(AsmValidationError(format!("{} is not a valid data type on line {}", data_type, line)));
+    }
+
+    Ok(data_type)
 }
 
 
@@ -24,14 +54,7 @@ fn validate_opcode(line:&str) -> Result<&str, AsmValidationError> {
     ];
 
     // get the opcode and remove any label there may be 
-    let opcode:&str = match line.find(":") {
-        Some(index) => {
-            let label_removed = &line[index+1..].trim();
-            label_removed.split(" ").collect::<Vec<&str>>()[0]
-        },
-        None => line.split(" ").collect::<Vec<&str>>()[0],
-    };
-
+    let opcode:&str = remove_label(line);
     if !valid_opcodes.contains(&opcode) {
         return Err(AsmValidationError(format!("{} is not a valid opcode on line {}", opcode, line)));
     }
@@ -256,100 +279,100 @@ mod tests {
 
     #[test]
     fn label_only_line() {
-        validate_asm_line("label_line:").unwrap();
+        validate_asm_line("label_line:", false).unwrap();
     }
 
 
     #[test]
     fn test_no_operand_instrs() {
-        validate_asm_line("NOP").unwrap();
-        validate_asm_line("HALT").unwrap();
+        validate_asm_line("NOP", false).unwrap();
+        validate_asm_line("HALT", false).unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_invalid_no_operand_instr() {
-        validate_asm_line("NOP $g0").unwrap();
+        validate_asm_line("NOP $g0", false).unwrap();
     }
 
     #[test]
     #[should_panic]
     fn test_wrong_number_of_operands() {
-        validate_asm_line("ADDC $g0, $g1, $g2").unwrap();
+        validate_asm_line("ADDC $g0, $g1, $g2", false).unwrap();
     }
 
 
     #[test]
     fn test_rrr_format_instrs() {
-        validate_asm_line("my_label: ADD $g0, $zero, $g1").unwrap();
-        validate_asm_line("SUB $g1,$g2,$g3").unwrap();
-        validate_asm_line("NAND $g4, $g5, $g6").unwrap();
-        validate_asm_line("OR $g4, $g5, $g6").unwrap();
-        validate_asm_line("LOAD $g7, $g8, $g9").unwrap();
-        validate_asm_line("STORE $ua, $sp, $ra").unwrap();
-        validate_asm_line("ADD $fp, $pc, $g0").unwrap();
+        validate_asm_line("my_label: ADD $g0, $zero, $g1", false).unwrap();
+        validate_asm_line("SUB $g1,$g2,$g3", false).unwrap();
+        validate_asm_line("NAND $g4, $g5, $g6", false).unwrap();
+        validate_asm_line("OR $g4, $g5, $g6", false).unwrap();
+        validate_asm_line("LOAD $g7, $g8, $g9", false).unwrap();
+        validate_asm_line("STORE $ua, $sp, $ra", false).unwrap();
+        validate_asm_line("ADD $fp, $pc, $g0", false).unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_rrr_invalid_operand() {
-        validate_asm_line("ADD $g0, $q5, $g1").unwrap();
+        validate_asm_line("ADD $g0, $q5, $g1", false).unwrap();
     }
 
 
     #[test]
     fn test_rri_format_instrs() {
-        validate_asm_line("ADDI $g0, $zero, 5").unwrap();
-        validate_asm_line("SUBI $g0, $g1, 0x000A").unwrap();
-        validate_asm_line("SLL $g0, $g1, 0b1101").unwrap();
-        validate_asm_line("SRL $g2, $g3, 13").unwrap();
-        validate_asm_line("SRA $g3, $g4, 0x0004").unwrap();
+        validate_asm_line("ADDI $g0, $zero, 5", false).unwrap();
+        validate_asm_line("SUBI $g0, $g1, 0x000A", false).unwrap();
+        validate_asm_line("SLL $g0, $g1, 0b1101", false).unwrap();
+        validate_asm_line("SRL $g2, $g3, 13", false).unwrap();
+        validate_asm_line("SRA $g3, $g4, 0x0004", false).unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_negative_immediate() {
-        validate_asm_line("ADDI $g0, $g1, -5").unwrap();
+        validate_asm_line("ADDI $g0, $g1, -5", false).unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_too_large_immediate() {
-        validate_asm_line("ADDI $g0, $g1, 0xFFFF").unwrap();
+        validate_asm_line("ADDI $g0, $g1, 0xFFFF", false).unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_malformed_immediate() {
-        validate_asm_line("ADDI $g0, $g1, 1q").unwrap();
+        validate_asm_line("ADDI $g0, $g1, 1q", false).unwrap();
     }
 
 
     #[test]
     fn test_rro_format_instrs() {
-        validate_asm_line("ADDC $g0, $g1").unwrap();
-        validate_asm_line("SUBC $g0, $g1").unwrap();
-        validate_asm_line("JUMP $g0, $g1").unwrap();
-        validate_asm_line("CMP $g0, $g1").unwrap();
-        validate_asm_line("JAL $g0, $g1").unwrap();
-        validate_asm_line("BEQ $g0, $g1").unwrap();
-        validate_asm_line("BNE $g0, $g1").unwrap();
-        validate_asm_line("BLT $g0, $g1").unwrap();
-        validate_asm_line("BGT $g0, $g1").unwrap();
-        validate_asm_line("IN $g0, $g1").unwrap();
-        validate_asm_line("OUT $g0, $g1").unwrap();
+        validate_asm_line("ADDC $g0, $g1", false).unwrap();
+        validate_asm_line("SUBC $g0, $g1", false).unwrap();
+        validate_asm_line("JUMP $g0, $g1", false).unwrap();
+        validate_asm_line("CMP $g0, $g1", false).unwrap();
+        validate_asm_line("JAL $g0, $g1", false).unwrap();
+        validate_asm_line("BEQ $g0, $g1", false).unwrap();
+        validate_asm_line("BNE $g0, $g1", false).unwrap();
+        validate_asm_line("BLT $g0, $g1", false).unwrap();
+        validate_asm_line("BGT $g0, $g1", false).unwrap();
+        validate_asm_line("IN $g0, $g1", false).unwrap();
+        validate_asm_line("OUT $g0, $g1", false).unwrap();
     }
 
 
     #[test]
     fn test_ri_format_instrs() {
-        validate_asm_line("MOVUI $g0, 200").unwrap();
-        validate_asm_line("MOVLI $g0, 0b11001010").unwrap();
-        validate_asm_line("syscall $g0, 254").unwrap();
+        validate_asm_line("MOVUI $g0, 200", false).unwrap();
+        validate_asm_line("MOVLI $g0, 0b11001010", false).unwrap();
+        validate_asm_line("syscall $g0, 254", false).unwrap();
     }
 }

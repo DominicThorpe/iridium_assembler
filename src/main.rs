@@ -17,15 +17,19 @@ fn main() -> Result<(), errors::CmdArgsError> {
     println!("Assembling {} into {}", cmd_args[1], cmd_args[2]);
 
     // Iterate through each line and validate it
+    let mut data_mode = false;
     let input_file = BufReader::new(OpenOptions::new().read(true).open(cmd_args[1].to_owned()).unwrap());
     for line_buffer in input_file.lines() {
         let line = line_buffer.unwrap();
         let line = line.trim();
         if line.is_empty() { // skip if line is blank
             continue;
+        } else if line == "data:" {
+            data_mode = true;
+            continue;
         }
 
-        validation::validate_asm_line(&line).unwrap();
+        validation::validate_asm_line(&line, data_mode).unwrap();
     }
 
     println!("Assembly successful!");
