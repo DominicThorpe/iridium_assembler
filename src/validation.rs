@@ -17,10 +17,10 @@ pub fn validate_asm_line(line:&str) -> Result<(), AsmValidationError> {
 
 /// Takes a line of assembly, extracts the opcode from it, and checks that it is a valid opcode. If an invalid opcode is found, an `AsmValidationError` will be thrown.
 fn validate_opcode(line:&str) -> Result<&str, AsmValidationError> {
-    let valid_opcodes:[&str;27] = [
+    let valid_opcodes:[&str;28] = [
         "ADD", "SUB", "ADDI", "SUBI", "SLL", "SRL", "SRA", "NAND", "OR", "ADDC", "SUBC",
         "LOAD", "STORE", "JUMP", "JAL", "CMP", "BEQ", "BNE", "BLT", "BGT", "NOP", "MOVUI",
-        "IN", "OUT", "syscall", "HALT", "NOP"
+        "IN", "OUT", "syscall", "HALT", "NOP", "MOVLI"
     ];
 
     // get the opcode and remove any label there may be 
@@ -143,7 +143,7 @@ fn validate_operands(line:&str, opcode:&str) -> Result<(), AsmValidationError> {
             validate_register(&operands[1])?;
         },
 
-        "MOVUI" | "syscall" => { // requires a register and an 8-bit immediate
+        "MOVUI" | "MOVLI" | "syscall" => { // requires a register and an 8-bit immediate
             if operands.len() != 2 {
                 return Err(AsmValidationError(format!("Incorrect number of operands on line {}", line)));
             }
@@ -349,6 +349,7 @@ mod tests {
     #[test]
     fn test_ri_format_instrs() {
         validate_asm_line("MOVUI $g0, 200").unwrap();
+        validate_asm_line("MOVLI $g0, 0b11001010").unwrap();
         validate_asm_line("syscall $g0, 254").unwrap();
     }
 }
