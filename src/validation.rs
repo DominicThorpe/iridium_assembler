@@ -56,12 +56,33 @@ fn get_operands_from_line<'a>(line:&'a str, opcode:&str) -> Vec<String> {
 }
 
 
+/// Checks that a given register string is a valid register and returns an AsmValidationError if not
+fn validate_register(register:&str) -> Result<(), AsmValidationError> {
+    let valid_registers:[&str;16] = [
+        "$zero", "$g0", "$g1", "$g2", "$g3", "$g4", "$g5", "$g6", "$g7", "$g8", "$g9",
+        "$ua", "$sp", "$ra", "$fp", "$pc"
+    ];
+
+    if !valid_registers.contains(&register) {
+        return Err(AsmValidationError(format!("{} is not a valid register", register)));
+    }
+
+    Ok(())
+}
+
+
 /// Takes a line of assembly and the associated opcode (which should already be validated), and checks that the operands are valid
 fn validate_operands(line:&str, opcode:&str) -> Result<(), AsmValidationError> {
     let operands = get_operands_from_line(line, opcode);
     match opcode {
         "ADD" | "SUB" | "NAND" | "OR" | "LOAD" | "STORE" => { // require 3 registers
+            if operands.len() != 3 {
+                return Err(AsmValidationError(format!("Too many operands on line {}", line)));
+            }
 
+            validate_register(&operands[0])?;
+            validate_register(&operands[1])?;
+            validate_register(&operands[2])?;
         },
 
         "ADDI" | "SUBI" | "SLL" | "SRL" | "SRA" => { // require 3 registers and an immediate
@@ -199,5 +220,24 @@ mod tests {
     #[should_panic]
     fn test_invalid_no_operand_instr() {
         validate_asm_line("NOP $g0").unwrap();
+    }
+
+
+    #[test]
+    fn test_rrr_operand_instrs() {
+        validate_asm_line("my_label: ADD $g0, $zero, $g1").unwrap();
+        validate_asm_line("SUB $g1,$g2,$g3").unwrap();
+        validate_asm_line("NAND $g4, $g5, $g6").unwrap();
+        validate_asm_line("OR $g4, $g5, $g6").unwrap();
+        validate_asm_line("LOAD $g7, $g8, $g9").unwrap();
+        validate_asm_line("STORE $ua, $sp, $ra").unwrap();
+        validate_asm_line("ADD $fp, $pc, $g0").unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_rrr_invalid_operand() {
+        validate_asm_line("ADD $g0, $q5, $g1").unwrap();
     }
 }
