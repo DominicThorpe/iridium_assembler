@@ -14,12 +14,13 @@ fn main() -> Result<(), errors::CmdArgsError> {
         return Err(errors::CmdArgsError);
     }
 
-    println!("Compiling {} into {}", cmd_args[1], cmd_args[2]);
+    println!("Assembling {} into {}", cmd_args[1], cmd_args[2]);
 
     // Iterate through each line and validate it
     let input_file = BufReader::new(OpenOptions::new().read(true).open(cmd_args[1].to_owned()).unwrap());
     for line_buffer in input_file.lines() {
         let line = line_buffer.unwrap();
+        let line = line.trim();
         if line.is_empty() { // skip if line is blank
             continue;
         }
@@ -27,5 +28,6 @@ fn main() -> Result<(), errors::CmdArgsError> {
         validation::validate_asm_line(&line).unwrap();
     }
 
+    println!("Assembly successful!");
     Ok(())
 }

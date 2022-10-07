@@ -5,17 +5,23 @@ use crate::errors::AsmValidationError;
 // is not valid Iridium assembly.
 pub fn validate_asm_line(line:&str) -> Result<(), AsmValidationError> {
     validate_label(line)?;
-    validate_opcode(line)?;
+
+    // validate if the line is not just a label
+    if !line.ends_with(":") {
+        let opcode = validate_opcode(line)?;
+        validate_operands(line, opcode)?;
+    }
+
     Ok(())
 }
 
 
 // Takes a line of assembly, extracts the opcode from it, and checks that it is a valid opcode. If an invalid opcode is found, an `AsmValidationError` will be thrown.
-fn validate_opcode(line:&str) -> Result<(), AsmValidationError> {
-    let valid_opcodes:[&str;26] = [
+fn validate_opcode(line:&str) -> Result<&str, AsmValidationError> {
+    let valid_opcodes:[&str;27] = [
         "ADD", "SUB", "ADDI", "SUBI", "SLL", "SRL", "SRA", "NAND", "OR", "ADDC", "SUBC",
         "LOAD", "STORE", "JUMP", "JAL", "CMP", "BEQ", "BNE", "BLT", "BGT", "NOP", "MOVUI",
-        "IN", "OUT", "syscall", "HALT"
+        "IN", "OUT", "syscall", "HALT", "NOP"
     ];
 
     // get the opcode and remove any label there may be 
@@ -29,6 +35,58 @@ fn validate_opcode(line:&str) -> Result<(), AsmValidationError> {
 
     if !valid_opcodes.contains(&opcode) {
         return Err(AsmValidationError(format!("{} is not a valid opcode on line {}", opcode, line)));
+    }
+
+    Ok(opcode)
+}
+
+
+// gets operands from a string using the assumption that the first operand will always be a register, or there will be no operands at all
+fn get_operands_from_line(line:&str) -> Vec<&str> {
+    let operands:Vec<&str> = Vec::new();
+    if !line.contains("$") {
+        return operands;
+    }
+
+    operands
+}
+
+
+// Takes a line of assembly and the associated opcode (which should already be validated), and checks that the operands are valid
+fn validate_operands(line:&str, opcode:&str) -> Result<(), AsmValidationError> {
+    let operands = get_operands_from_line(line);
+    match opcode {
+        "ADD" | "SUB" | "NAND" | "OR" | "LOAD" | "STORE" => { // require 3 registers
+
+        },
+
+        "ADDI" | "SUBI" | "SLL" | "SRL" | "SRA" => { // require 3 registers and an immediate
+
+        },
+
+        "ADDC" | "SUBC" | "JUMP" | "CMP" | "JAL" | "BEQ" | "BNE" | "BLT" | "BGT" | "IN" | "OUT" => { // require 2 registers
+
+        },
+
+        "MOVUI" => { // requires a register and a 16-bit immediate
+
+        },
+
+        "syscall" => { // requires a register and an 8-bit immediate
+
+        },
+
+        "NOP" | "HALT" => { // no operands
+            if operands.is_empty() {
+                return Ok(());
+            } else {
+                return Err(AsmValidationError(format!("Instruction {} takes no arguments", line)));
+            }
+        },
+
+        _ => {
+            return Err(AsmValidationError(format!("Invalid opcode: {} on line {}", opcode, line)));
+        }
     }
 
     Ok(())
@@ -117,5 +175,25 @@ mod tests {
     #[should_panic]
     fn test_blank_label() {
         validate_label(":ADD $r0, $r1, $r2").unwrap();
+    }
+
+
+    #[test]
+    fn label_only_line() {
+        validate_asm_line("label_line:").unwrap();
+    }
+
+
+    #[test]
+    fn test_no_operand_instrs() {
+        validate_asm_line("NOP").unwrap();
+        validate_asm_line("HALT").unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_invalid_no_operand_instr() {
+        validate_asm_line("NOP $g0").unwrap();
     }
 }
