@@ -12,7 +12,7 @@ pub fn validate_asm_line(line:&str, data_mode:bool) -> Result<(), AsmValidationE
             validate_operands(line, opcode)?;
         } else {
             let data_type = validate_data_type(line)?;
-            println!("Datatype: {}", data_type);
+            validate_data_format(line, data_type)?;
         }
     }
 
@@ -24,10 +24,9 @@ pub fn validate_asm_line(line:&str, data_mode:bool) -> Result<(), AsmValidationE
 fn remove_label(line:&str) -> &str {
     match line.find(":") {
         Some(index) => {
-            let label_removed = &line[index+1..].trim();
-            label_removed.split(" ").collect::<Vec<&str>>()[0]
+            &line[index+1..].trim()
         },
-        None => line.split(" ").collect::<Vec<&str>>()[0],
+        None => line,
     }
 }
 
@@ -45,6 +44,61 @@ fn validate_data_type(line:&str) -> Result<&str, AsmValidationError> {
 }
 
 
+/// Checks that a `Vec<&str>` has a certain number of items and returns an `AsmValidationError` if it does not
+fn validate_token_vec(line:&str, vec:&Vec<&str>, req_len:usize) -> Result<(), AsmValidationError> {
+    if vec.len() != req_len {
+        return Err(AsmValidationError(format!("Incorrect format for tokenisation on line {}", line)));
+    }
+
+    Ok(())
+}
+
+
+/// Takes a line of assembly of a data instruction and its data type and checks that the data provided matches that data type
+fn validate_data_format(line:&str, data_type:&str) -> Result<(), AsmValidationError> {
+    println!("{}", remove_label(line));
+    let tokens:Vec<&str> = remove_label(line).split(" ").collect();
+    println!("Line: {},\tTokens: {:?}", line, tokens);
+    match data_type {
+        ".int" => { // label: .int <16-bit integer>
+            validate_token_vec(line, &tokens, 2)?;
+            validate_immediate(tokens[1], 16, true)?;
+        },
+
+        ".long" => { // label: .long <32-bit integer>
+            validate_token_vec(line, &tokens, 2)?;
+            validate_immediate(tokens[1], 32, true)?;
+        },
+
+        ".half" => { // label: .half <16-bit IEEE 754 float>
+
+        },
+
+        ".float" => { // label: .half <32-bit IEEE 754 float>
+
+        },
+
+        ".section" => { // label: .section [<bytes>]
+
+        },
+
+        ".char" => { // label: .char '<character>'
+
+        },
+
+        ".text" => { // label: .text "<string>"
+
+        },
+
+        _ => {
+            return Err(AsmValidationError(format!("{} is not a valid data type on line {}", data_type, line)));
+        }
+    }
+
+    Ok(())
+}
+
+
 /// Takes a line of assembly, extracts the opcode from it, and checks that it is a valid opcode. If an invalid opcode is found, an `AsmValidationError` will be thrown.
 fn validate_opcode(line:&str) -> Result<&str, AsmValidationError> {
     let valid_opcodes:[&str;28] = [
@@ -54,7 +108,7 @@ fn validate_opcode(line:&str) -> Result<&str, AsmValidationError> {
     ];
 
     // get the opcode and remove any label there may be 
-    let opcode:&str = remove_label(line);
+    let opcode:&str = remove_label(line).split(" ").collect::<Vec<&str>>()[0];
     if !valid_opcodes.contains(&opcode) {
         return Err(AsmValidationError(format!("{} is not a valid opcode on line {}", opcode, line)));
     }
@@ -97,17 +151,17 @@ fn validate_register(register:&str) -> Result<(), AsmValidationError> {
 /// Checks that a given immediate is a valid immediate and returns an `AsmValidationError` if not. Will ensure 
 /// that immediate is within the range the given number of bits can handle, and is in a valid format given the 
 /// prefix (0x for hexadecimal and 0b for binary, no prefix for decimal).
-fn validate_immediate(operand:&str, bits:i16) -> Result<(), AsmValidationError> {
-    let immediate:i32;
+fn validate_immediate(operand:&str, bits:i16, signed:bool) -> Result<(), AsmValidationError> {
+    let immediate:i64;
     if operand.starts_with("0b") {
-        immediate = match i32::from_str_radix(&operand[2..], 2) {
+        immediate = match i64::from_str_radix(&operand[2..], 2) {
             Ok(val) => val,
             Err(_) => {
                 return Err(AsmValidationError(format!("Could not parse binary immediate {}", operand)));
             }
         }
     } else if operand.starts_with("0x") {
-        immediate = match i32::from_str_radix(&operand[2..], 16) {
+        immediate = match i64::from_str_radix(&operand[2..], 16) {
             Ok(val) => val,
             Err(_) => {
                 return Err(AsmValidationError(format!("Could not parse hexadecimal immediate {}", operand)));
@@ -122,10 +176,23 @@ fn validate_immediate(operand:&str, bits:i16) -> Result<(), AsmValidationError> 
         }
     }
 
-    let max_immediate = (2_i32.pow(bits.try_into().unwrap())) - 1;
-    if immediate < 0 {
-        return Err(AsmValidationError(format!("Immediate operand {} cannot be negative", operand))); 
-    } else if immediate > max_immediate {
+    let max_immediate = match signed {
+        true => ((2_i64.pow(bits.try_into().unwrap())) / 2) - 1,
+        false => (2_i64.pow(bits.try_into().unwrap())) - 1
+    };
+
+    let min_immediate = match signed {
+        true => -((2_i64.pow(bits.try_into().unwrap())) / 2),
+        false => 0
+    };
+
+
+    println!("{} < {} < {}", min_immediate, operand, max_immediate);
+
+
+    if immediate < 0 && !signed {
+        return Err(AsmValidationError(format!("Unsigned immediate operand {} cannot be negative", operand))); 
+    } else if immediate > max_immediate || (immediate < min_immediate && signed) {
         return Err(AsmValidationError(format!("Immediate {} cannot fit into {} bits", operand, bits)));
     }
 
@@ -154,7 +221,7 @@ fn validate_operands(line:&str, opcode:&str) -> Result<(), AsmValidationError> {
 
             validate_register(&operands[0])?;
             validate_register(&operands[1])?;
-            validate_immediate(&operands[2], 4)?;
+            validate_immediate(&operands[2], 4, false)?;
         },
 
         "ADDC" | "SUBC" | "JUMP" | "CMP" | "JAL" | "BEQ" | "BNE" | "BLT" | "BGT" | "IN" | "OUT" => { // require 2 registers
@@ -172,7 +239,7 @@ fn validate_operands(line:&str, opcode:&str) -> Result<(), AsmValidationError> {
             }
 
             validate_register(&operands[0])?;
-            validate_immediate(&operands[1], 8)?;
+            validate_immediate(&operands[1], 8, false)?;
         },
 
         "NOP" | "HALT" => { // no operands
@@ -374,5 +441,57 @@ mod tests {
         validate_asm_line("MOVUI $g0, 200", false).unwrap();
         validate_asm_line("MOVLI $g0, 0b11001010", false).unwrap();
         validate_asm_line("syscall $g0, 254", false).unwrap();
+    }
+
+
+    #[test]
+    fn test_int_data() {
+        validate_asm_line("my_label: .int 40", true).unwrap();
+        validate_asm_line("my_label: .int 0xFF", true).unwrap();
+        validate_asm_line("my_label: .int -100", true).unwrap();
+        validate_asm_line("my_label: .int 0b00111010", true).unwrap();
+        validate_asm_line("my_label: .int 0", true).unwrap();
+        validate_asm_line("my_label: .int 32767", true).unwrap();
+        validate_asm_line("my_label: .int -32768", true).unwrap();
+    }
+
+
+    #[test]
+    fn test_long_data() {
+        validate_asm_line("my_label: .long 40", true).unwrap();
+        validate_asm_line("my_label: .long 0xFF", true).unwrap();
+        validate_asm_line("my_label: .long -100", true).unwrap();
+        validate_asm_line("my_label: .long 0b00111010", true).unwrap();
+        validate_asm_line("my_label: .long 0", true).unwrap();
+        validate_asm_line("my_label: .long 2147483647", true).unwrap();
+        validate_asm_line("my_label: .long -2147483648", true).unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_int_data_too_small() {
+        validate_asm_line("my_label: .int -32769", true).unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_int_data_too_large() {
+        validate_asm_line("my_label: .int 32768", true).unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_long_data_too_small() {
+        validate_asm_line("my_label: .int -2147483649", true).unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_long_data_too_large() {
+        validate_asm_line("my_label: .int 2147483648", true).unwrap();
     }
 }
