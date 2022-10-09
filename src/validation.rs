@@ -54,28 +54,55 @@ fn validate_token_vec(line:&str, vec:&Vec<&str>, req_len:usize) -> Result<(), As
 }
 
 
+/// Takes an immediate in floating point format and checks if it can fit into an IEEE 754 floating point format with the given
+/// parameters, either half or regular format. Will return an `AsmValidationError` if the immediate is invalid.
+fn validate_float_immediate(line:&str, immediate:&str, short:bool) -> Result<(), AsmValidationError> {
+    match immediate.parse::<f32>() {
+        Ok(val) => {
+            if short {
+                let min_max_value = 4_293_918_720.0;
+                if val > min_max_value || val < -min_max_value {
+                    return Err(AsmValidationError(format!("{} cannot fit into a 16-bit IEEE 754 format number on line {}", immediate, line))); 
+                }
+            } else {
+                let min_max_value:f32 = f32::MAX;
+                if val > min_max_value || val < -min_max_value {
+                    return Err(AsmValidationError(format!("{} cannot fit into a 32-bit IEEE 754 format number on line {}", immediate, line))); 
+                }
+            }
+        },
+
+        Err(_) => {
+            return Err(AsmValidationError(format!("{} is not a valid immediate on line {}", immediate, line)));
+        }
+    };
+
+    Ok(())
+}
+
+
 /// Takes a line of assembly of a data instruction and its data type and checks that the data provided matches that data type
 fn validate_data_format(line:&str, data_type:&str) -> Result<(), AsmValidationError> {
-    println!("{}", remove_label(line));
     let tokens:Vec<&str> = remove_label(line).split(" ").collect();
-    println!("Line: {},\tTokens: {:?}", line, tokens);
     match data_type {
         ".int" => { // label: .int <16-bit integer>
             validate_token_vec(line, &tokens, 2)?;
-            validate_immediate(tokens[1], 16, true)?;
+            validate_int_immediate(tokens[1], 16, true)?;
         },
 
         ".long" => { // label: .long <32-bit integer>
             validate_token_vec(line, &tokens, 2)?;
-            validate_immediate(tokens[1], 32, true)?;
+            validate_int_immediate(tokens[1], 32, true)?;
         },
 
         ".half" => { // label: .half <16-bit IEEE 754 float>
-
+            validate_token_vec(line, &tokens, 2)?;
+            validate_float_immediate(line, tokens[1], true)?;
         },
 
         ".float" => { // label: .half <32-bit IEEE 754 float>
-
+            validate_token_vec(line, &tokens, 2)?;
+            validate_float_immediate(line, tokens[1], false)?;
         },
 
         ".section" => { // label: .section [<bytes>]
@@ -151,7 +178,7 @@ fn validate_register(register:&str) -> Result<(), AsmValidationError> {
 /// Checks that a given immediate is a valid immediate and returns an `AsmValidationError` if not. Will ensure 
 /// that immediate is within the range the given number of bits can handle, and is in a valid format given the 
 /// prefix (0x for hexadecimal and 0b for binary, no prefix for decimal).
-fn validate_immediate(operand:&str, bits:i16, signed:bool) -> Result<(), AsmValidationError> {
+fn validate_int_immediate(operand:&str, bits:i16, signed:bool) -> Result<(), AsmValidationError> {
     let immediate:i64;
     if operand.starts_with("0b") {
         immediate = match i64::from_str_radix(&operand[2..], 2) {
@@ -221,7 +248,7 @@ fn validate_operands(line:&str, opcode:&str) -> Result<(), AsmValidationError> {
 
             validate_register(&operands[0])?;
             validate_register(&operands[1])?;
-            validate_immediate(&operands[2], 4, false)?;
+            validate_int_immediate(&operands[2], 4, false)?;
         },
 
         "ADDC" | "SUBC" | "JUMP" | "CMP" | "JAL" | "BEQ" | "BNE" | "BLT" | "BGT" | "IN" | "OUT" => { // require 2 registers
@@ -239,7 +266,7 @@ fn validate_operands(line:&str, opcode:&str) -> Result<(), AsmValidationError> {
             }
 
             validate_register(&operands[0])?;
-            validate_immediate(&operands[1], 8, false)?;
+            validate_int_immediate(&operands[1], 8, false)?;
         },
 
         "NOP" | "HALT" => { // no operands
@@ -493,5 +520,57 @@ mod tests {
     #[should_panic]
     fn test_long_data_too_large() {
         validate_asm_line("my_label: .int 2147483648", true).unwrap();
+    }
+
+
+    #[test]
+    fn test_floating_point_half_data() {
+        validate_asm_line("my_label:.half 0", true).unwrap();
+        validate_asm_line("my_label: .half 0.001", true).unwrap();
+        validate_asm_line("my_label: .half 5.25", true).unwrap();
+        validate_asm_line("my_label: .half -5.25", true).unwrap();
+        validate_asm_line("my_label: .half -4293918721", true).unwrap();
+        validate_asm_line("my_label: .half 4293918721", true).unwrap();
+    }
+
+
+    #[test]
+    fn test_floating_point_full_data() {
+        validate_asm_line("my_label:.float 0", true).unwrap();
+        validate_asm_line("my_label: .float 0.001", true).unwrap();
+        validate_asm_line("my_label: .float 5.25", true).unwrap();
+        validate_asm_line("my_label: .float -5.25", true).unwrap();
+        validate_asm_line(&format!("my_label: .float {}", -f32::MAX), true).unwrap();
+        validate_asm_line(&format!("my_label: .float {}", f32::MAX), true).unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_half_float_data_too_small() {
+        validate_asm_line("my_label: .int -4293918722", true).unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_half_float_data_too_large() {
+        validate_asm_line("my_label: .int 4293918722", true).unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_full_float_data_too_small() {
+        let min:f64 = f32::MIN.into();
+        validate_asm_line(&format!("my_label: .float {}", min * 2.0), true).unwrap(); // multiply to take into account underflow
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_full_float_data_too_large() {
+        let max:f64 = f32::MAX.into();
+        validate_asm_line(&format!("my_label: .float {}", max * 2.0), true).unwrap(); // multiply to take into account underflow
     }
 }
