@@ -1,3 +1,4 @@
+use std::str;
 use crate::errors::AsmValidationError;
 
 
@@ -81,6 +82,60 @@ fn validate_float_immediate(line:&str, immediate:&str, short:bool) -> Result<(),
 }
 
 
+/// Takes a character immediate in the format `'<char>'` and checks that it is a valid UTF-8 character in 
+/// that format. If not, an `AsmValidationError` is returned.
+fn validate_char_immediate(line:&str, immediate:&str) -> Result<(), AsmValidationError> {
+    println!("{}", immediate);
+    if !immediate.starts_with("'") || !immediate.ends_with("'") {
+        return Err(AsmValidationError(format!(
+            "Immediate {} on line \"{}\" is not in a valid format - should be label: .char '<char>'", immediate, line
+        )));
+    }
+
+    let imm_char:&str = &immediate[1..immediate.len() - 1];
+    if imm_char.len() != 1 {
+        return Err(AsmValidationError(format!(
+            "Immediate {} on line \"{}\" is not in a valid format - more than 1 character found", immediate, line
+        )));
+    }
+
+    match str::from_utf8(imm_char.as_bytes()) {
+        Ok(_) => Ok(()),
+        Err(_) => Err(AsmValidationError(format!(
+            "Immediate {} on line \"{}\" is not a valid UTF-8 character", immediate, line
+        )))
+    }
+}
+
+
+/// Takes a line of assembly containing a character data instruction in the form <label>: .char '<char>' 
+/// and returns `Ok(())` if it is valid, and `AsmValidationError` if it is not.
+fn validate_char_instr(line:&str) -> Result<(), AsmValidationError> {
+    let mut instr = remove_label(line).trim();
+    if !instr.starts_with(".char") {
+        return Err(AsmValidationError(format!("{} is not a valid character data instruction", line)));
+    }
+
+    // checks that the character immediate format is '<character>'
+    instr = &instr[5..].trim();
+    if !(instr.starts_with("'") && instr.ends_with("'")) {
+        return Err(AsmValidationError(format!("{} is not a valid character data instruction", line)));
+    }
+
+    match validate_char_immediate(line, instr) {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            let character = &instr[1..instr.len() - 1];
+            if character == "\t" || character == "\n" || character == "\0" || character == "\r" {
+               return Ok(());
+            }
+
+            Err(e)
+        },
+    }
+}
+
+
 /// Takes a line of assembly of a data instruction and its data type and checks that the data provided matches that data type
 fn validate_data_format(line:&str, data_type:&str) -> Result<(), AsmValidationError> {
     let tokens:Vec<&str> = remove_label(line).split(" ").collect();
@@ -110,7 +165,7 @@ fn validate_data_format(line:&str, data_type:&str) -> Result<(), AsmValidationEr
         },
 
         ".char" => { // label: .char '<character>'
-
+            validate_char_instr(line)?;
         },
 
         ".text" => { // label: .text "<string>"
@@ -572,5 +627,44 @@ mod tests {
     fn test_full_float_data_too_large() {
         let max:f64 = f32::MAX.into();
         validate_asm_line(&format!("my_label: .float {}", max * 2.0), true).unwrap(); // multiply to take into account underflow
+    }
+
+
+    #[test]
+    fn test_character_data() {
+        validate_asm_line("my_label: .char 'a'", true).unwrap();
+        validate_asm_line("my_label: .char 'b'", true).unwrap();
+        validate_asm_line("my_label: .char '.'", true).unwrap();
+        validate_asm_line("my_label: .char ' '", true).unwrap();
+        validate_asm_line("my_label: .char '\t'", true).unwrap();
+        validate_asm_line("my_label: .char '\n'", true).unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_invalid_char_data() {
+        validate_asm_line("my_label: .char '你'", true).unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_string_in_char_data() {
+        validate_asm_line("my_label: .char 'hi'", true).unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_wrong_quotes_char_data() {
+        validate_asm_line("my_label: .char \"h\"", true).unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_empty_quotes_char_data() {
+        validate_asm_line("my_label: .char ''", true).unwrap();
     }
 }
