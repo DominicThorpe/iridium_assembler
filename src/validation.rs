@@ -136,7 +136,59 @@ fn validate_char_instr(line:&str) -> Result<(), AsmValidationError> {
 }
 
 
-/// Takes a line of assembly of a data instruction and its data type and checks that the data provided matches that data type
+/// Takes a line of assembly containing a .text data instruction and determines if it is valid or not,
+/// will return an `AsmValidationError` if not.
+fn validate_text_instr(line:&str) -> Result<(), AsmValidationError> {
+    let instr = remove_label(line);
+    let tokens:Vec<&str> = instr.split(" ").collect();
+    let array_size:i64 = match i64::from_str_radix(tokens[1].trim(), 10) {
+        Ok(val) => val,
+        Err(_) => {
+            return Err(AsmValidationError(format!(
+                "{} is not a valid size for the array on line {}", tokens[1].trim(), line
+            )));
+        }
+    };
+
+    let text_start_index = match instr.find("\"") {
+        Some(index) => index,
+        None => {
+            return Err(AsmValidationError(format!(
+                "{} is not a correctly formatted .text data instruction - have you used double quotes?", line
+            )));
+        }
+    };
+    
+    if !instr.ends_with("\"") {
+        return Err(AsmValidationError(format!(
+            "{} is not a correctly formatted .text data instruction - have you used double quotes?", line
+        )));
+    }
+
+    let text = &instr[text_start_index..];
+    match str::from_utf8(instr.as_bytes()) {
+        Ok(_) => {},
+        Err(_) => {
+            return Err(AsmValidationError(format!(
+                "Text {} on line \"{}\" is not valid UTF-8", text, line
+            )));
+        }
+    };
+
+    let str_len = text.len() - 1;
+    if str_len > array_size.try_into().unwrap() {
+        return Err(AsmValidationError(format!(
+            "Text is too long for {} bytes on line {}. Have you taken the null terminator into account?",
+            array_size, line
+        )));
+    }
+
+    Ok(())
+}
+
+
+/// Takes a line of assembly of a data instruction and its data type and checks that the data provided 
+/// matches that data type
 fn validate_data_format(line:&str, data_type:&str) -> Result<(), AsmValidationError> {
     let tokens:Vec<&str> = remove_label(line).split(" ").collect();
     match data_type {
@@ -169,7 +221,7 @@ fn validate_data_format(line:&str, data_type:&str) -> Result<(), AsmValidationEr
         },
 
         ".text" => { // label: .text "<string>"
-
+            validate_text_instr(line)?;
         },
 
         _ => {
@@ -267,9 +319,6 @@ fn validate_int_immediate(operand:&str, bits:i16, signed:bool) -> Result<(), Asm
         true => -((2_i64.pow(bits.try_into().unwrap())) / 2),
         false => 0
     };
-
-
-    println!("{} < {} < {}", min_immediate, operand, max_immediate);
 
 
     if immediate < 0 && !signed {
@@ -666,5 +715,34 @@ mod tests {
     #[should_panic]
     fn test_empty_quotes_char_data() {
         validate_asm_line("my_label: .char ''", true).unwrap();
+    }
+
+
+    #[test]
+    fn test_valid_text() {
+        validate_asm_line("my_text: .text 13 \"Hello world!\"", true).unwrap();
+        validate_asm_line("empty_text: .text 1 \"\"", true).unwrap();
+        validate_asm_line("multiline:.text 50 \"My longer\nparagraph of some\rgood text\"", true).unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_too_short_text() {
+        validate_asm_line("my_text: .text 5 \"This is too  long for the array\"", true).unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_no_length_text() {
+        validate_asm_line("my_text: .text \"Hello world!\"", true).unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_invalid_quotes_text() {
+        validate_asm_line("my_text: .text 10 'hello'", true).unwrap();
     }
 }
