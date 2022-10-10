@@ -2,7 +2,8 @@ use std::str;
 use crate::errors::AsmValidationError;
 
 
-/// Takes a line of assembly code, for example `ADD $g0, $zero, $g1`, and returns an `Err` if it is not valid Iridium assembly.
+/// Takes a line of assembly code, for example `ADD $g0, $zero, $g1`, and returns an `Err` if it is not 
+/// valid Iridium assembly.
 pub fn validate_asm_line(line:&str, data_mode:bool) -> Result<(), AsmValidationError> {
     validate_label(line)?;
 
@@ -32,8 +33,8 @@ fn remove_label(line:&str) -> &str {
 }
 
 
-/// Takes a line of assembly and checks if it is a valid data instruction, such as .text or .float. Returns an `AsmValidationErr` if there is no valid data type, and 
-/// returns the data type if there is.
+/// Takes a line of assembly and checks if it is a valid data instruction, such as .text or .float. Returns 
+/// an `AsmValidationErr` if there is no valid data type, and returns the data type if there is.
 fn validate_data_type(line:&str) -> Result<&str, AsmValidationError> {
     let valid_data_types:[&str;7] = [".int", ".long", ".half", ".float", ".section", ".char", ".text"];
     let data_type = remove_label(line).split(" ").collect::<Vec<&str>>()[0];
@@ -45,7 +46,8 @@ fn validate_data_type(line:&str) -> Result<&str, AsmValidationError> {
 }
 
 
-/// Checks that a `Vec<&str>` has a certain number of items and returns an `AsmValidationError` if it does not
+/// Checks that a `Vec<&str>` has a certain number of items and returns an `AsmValidationError` if it 
+/// does not.
 fn validate_token_vec(line:&str, vec:&Vec<&str>, req_len:usize) -> Result<(), AsmValidationError> {
     if vec.len() != req_len {
         return Err(AsmValidationError(format!("Incorrect format for tokenisation on line {}", line)));
@@ -55,20 +57,25 @@ fn validate_token_vec(line:&str, vec:&Vec<&str>, req_len:usize) -> Result<(), As
 }
 
 
-/// Takes an immediate in floating point format and checks if it can fit into an IEEE 754 floating point format with the given
-/// parameters, either half or regular format. Will return an `AsmValidationError` if the immediate is invalid.
+/// Takes an immediate in floating point format and checks if it can fit into an IEEE 754 floating point 
+/// format with the given parameters, either half or regular format. Will return an `AsmValidationError` 
+/// if the immediate is invalid.
 fn validate_float_immediate(line:&str, immediate:&str, short:bool) -> Result<(), AsmValidationError> {
     match immediate.parse::<f32>() {
         Ok(val) => {
             if short {
                 let min_max_value = 4_293_918_720.0;
                 if val > min_max_value || val < -min_max_value {
-                    return Err(AsmValidationError(format!("{} cannot fit into a 16-bit IEEE 754 format number on line {}", immediate, line))); 
+                    return Err(AsmValidationError(format!(
+                        "{} cannot fit into a 16-bit IEEE 754 format number on line {}", immediate, line
+                    ))); 
                 }
             } else {
                 let min_max_value:f32 = f32::MAX;
                 if val > min_max_value || val < -min_max_value {
-                    return Err(AsmValidationError(format!("{} cannot fit into a 32-bit IEEE 754 format number on line {}", immediate, line))); 
+                    return Err(AsmValidationError(format!(
+                        "{} cannot fit into a 32-bit IEEE 754 format number on line {}", immediate, line
+                    ))); 
                 }
             }
         },
@@ -88,14 +95,16 @@ fn validate_char_immediate(line:&str, immediate:&str) -> Result<(), AsmValidatio
     println!("{}", immediate);
     if !immediate.starts_with("'") || !immediate.ends_with("'") {
         return Err(AsmValidationError(format!(
-            "Immediate {} on line \"{}\" is not in a valid format - should be label: .char '<char>'", immediate, line
+            "Immediate {} on line \"{}\" is not in a valid format - should be label: .char '<char>'", 
+            immediate, line
         )));
     }
 
     let imm_char:&str = &immediate[1..immediate.len() - 1];
     if imm_char.len() != 1 {
         return Err(AsmValidationError(format!(
-            "Immediate {} on line \"{}\" is not in a valid format - more than 1 character found", immediate, line
+            "Immediate {} on line \"{}\" is not in a valid format - more than 1 character found", 
+            immediate, line
         )));
     }
 
@@ -136,25 +145,36 @@ fn validate_char_instr(line:&str) -> Result<(), AsmValidationError> {
 }
 
 
+/// Takes a line of assembly for a data instruction that should have a specified length, such as `.text`
+/// or `.section`, anc checks that it does. Returns the array size if valid, and an `AsmValidationError`
+/// if not.
+///
+/// ASSUMES LABEL HAS ALREADY BEEN REMOVED!
+fn get_valid_array_size(line:&str) -> Result<i64, AsmValidationError> {
+    let tokens:Vec<&str> = line.split(" ").collect();
+    match i64::from_str_radix(tokens[1].trim(), 10) {
+        Ok(val) => Ok(val),
+        Err(_) => {
+            Err(AsmValidationError(format!(
+                "{} is not a valid size for the array on line {}", tokens[1].trim(), line
+            )))
+        }
+    }
+}
+
+
 /// Takes a line of assembly containing a .text data instruction and determines if it is valid or not,
 /// will return an `AsmValidationError` if not.
 fn validate_text_instr(line:&str) -> Result<(), AsmValidationError> {
     let instr = remove_label(line);
-    let tokens:Vec<&str> = instr.split(" ").collect();
-    let array_size:i64 = match i64::from_str_radix(tokens[1].trim(), 10) {
-        Ok(val) => val,
-        Err(_) => {
-            return Err(AsmValidationError(format!(
-                "{} is not a valid size for the array on line {}", tokens[1].trim(), line
-            )));
-        }
-    };
+    let array_size = get_valid_array_size(instr)?;
 
     let text_start_index = match instr.find("\"") {
         Some(index) => index,
         None => {
             return Err(AsmValidationError(format!(
-                "{} is not a correctly formatted .text data instruction - have you used double quotes?", line
+                "{} is not a correctly formatted .text data instruction - have you used double quotes?", 
+                line
             )));
         }
     };
@@ -187,6 +207,46 @@ fn validate_text_instr(line:&str) -> Result<(), AsmValidationError> {
 }
 
 
+/// Takes a line of assembly for a bytes section and checks that it is formatted properly. Will return
+/// an `AsmValidationError` if not.
+fn validate_bytes_section_instr(line:&str) -> Result<(), AsmValidationError> {
+    let instr = remove_label(line);
+    let array_size = get_valid_array_size(instr)?;
+
+    let array_start_index = match instr.find("[") {
+        Some(index) => index,
+        None => {
+            return Err(AsmValidationError(format!(
+                "{} is not a properly formatted array, which requires square brackets []", instr
+            )));
+        }
+    };
+
+    if !instr.ends_with("]") {
+        return Err(AsmValidationError(format!(
+            "{} is not a properly formatted array, which requires square brackets []", instr
+        ))); 
+    }
+
+    let array_contents_str = &instr[array_start_index + 1..instr.len() - 1];
+    let array_contents:Vec<&str> = array_contents_str.split(",")
+                                        .map(|item| item.trim())
+                                        .filter(|item| item != &"")
+                                        .collect();
+    for item in &array_contents {
+        validate_int_immediate(item, 32, true)?;
+    }
+
+    if array_contents.len() > array_size.try_into().unwrap() {
+        return Err(AsmValidationError(format!(
+            "Bytes array is too long for section of length {} on line {}.", array_size, line
+        )));
+    }
+
+    Ok(())    
+}
+
+
 /// Takes a line of assembly of a data instruction and its data type and checks that the data provided 
 /// matches that data type
 fn validate_data_format(line:&str, data_type:&str) -> Result<(), AsmValidationError> {
@@ -213,7 +273,7 @@ fn validate_data_format(line:&str, data_type:&str) -> Result<(), AsmValidationEr
         },
 
         ".section" => { // label: .section [<bytes>]
-
+            validate_bytes_section_instr(line)?;
         },
 
         ".char" => { // label: .char '<character>'
@@ -221,6 +281,7 @@ fn validate_data_format(line:&str, data_type:&str) -> Result<(), AsmValidationEr
         },
 
         ".text" => { // label: .text "<string>"
+            println!("Found text!");
             validate_text_instr(line)?;
         },
 
@@ -233,7 +294,8 @@ fn validate_data_format(line:&str, data_type:&str) -> Result<(), AsmValidationEr
 }
 
 
-/// Takes a line of assembly, extracts the opcode from it, and checks that it is a valid opcode. If an invalid opcode is found, an `AsmValidationError` will be thrown.
+/// Takes a line of assembly, extracts the opcode from it, and checks that it is a valid opcode. If an 
+/// invalid opcode is found, an `AsmValidationError` will be thrown.
 fn validate_opcode(line:&str) -> Result<&str, AsmValidationError> {
     let valid_opcodes:[&str;28] = [
         "ADD", "SUB", "ADDI", "SUBI", "SLL", "SRL", "SRA", "NAND", "OR", "ADDC", "SUBC",
@@ -251,7 +313,8 @@ fn validate_opcode(line:&str) -> Result<&str, AsmValidationError> {
 }
 
 
-/// Gets operands from a string by removing the operand and any comments and labels, and then split it up using commas
+/// Gets operands from a string by removing the operand and any comments and labels, and then split it up 
+/// using commas
 fn get_operands_from_line<'a>(line:&'a str, opcode:&str) -> Vec<String> {    
     let opcode_start_index = line.find(opcode).expect(&format!("Could not find opcode {} in line {}", opcode, line));
     let opcode_end_index = opcode_start_index + opcode.len();
@@ -282,9 +345,9 @@ fn validate_register(register:&str) -> Result<(), AsmValidationError> {
 }
 
 
-/// Checks that a given immediate is a valid immediate and returns an `AsmValidationError` if not. Will ensure 
-/// that immediate is within the range the given number of bits can handle, and is in a valid format given the 
-/// prefix (0x for hexadecimal and 0b for binary, no prefix for decimal).
+/// Checks that a given immediate is a valid immediate and returns an `AsmValidationError` if not. Will 
+/// ensure that immediate is within the range the given number of bits can handle, and is in a valid 
+/// format given the prefix (0x for hexadecimal and 0b for binary, no prefix for decimal).
 fn validate_int_immediate(operand:&str, bits:i16, signed:bool) -> Result<(), AsmValidationError> {
     let immediate:i64;
     if operand.starts_with("0b") {
@@ -331,7 +394,8 @@ fn validate_int_immediate(operand:&str, bits:i16, signed:bool) -> Result<(), Asm
 }
 
 
-/// Takes a line of assembly and the associated opcode (which should already be validated), and checks that the operands are valid
+/// Takes a line of assembly and the associated opcode (which should already be validated), and checks 
+/// that the operands are valid
 fn validate_operands(line:&str, opcode:&str) -> Result<(), AsmValidationError> {
     let operands = get_operands_from_line(line, opcode);
     match opcode {
@@ -390,7 +454,8 @@ fn validate_operands(line:&str, opcode:&str) -> Result<(), AsmValidationError> {
 }
 
 
-/// Takes a line of assembly and checks if it contains a label and, if it does, checks that the label is valid - if not, the function will return an error.
+/// Takes a line of assembly and checks if it contains a label and, if it does, checks that the label is 
+/// valid - if not, the function will return an error.
 fn validate_label(line:&str) -> Result<(), AsmValidationError> {
     let label = match line.find(":") {
         Some(index) => line[..index].to_owned(),
@@ -744,5 +809,48 @@ mod tests {
     #[should_panic]
     fn test_invalid_quotes_text() {
         validate_asm_line("my_text: .text 10 'hello'", true).unwrap();
+    }
+
+
+    #[test]
+    fn test_valid_bytes_section() {
+        validate_asm_line("my_label: .section 4 [0xFFFF, 0x1234, 0xAAAA, 0x1212]", true).unwrap();
+        validate_asm_line("empty: .section 0 []", true).unwrap();
+        validate_asm_line("my_label: .section 10 [0xFFFF, 0x1234, 0xAAAA, 0x1212]", true).unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_too_small_bytes_section() {
+        validate_asm_line("my_label: .section 3 [0xFFFF, 0x1234, 0xAAAA, 0x1212]", true).unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_wrong_brackets_bytes_section() {
+        validate_asm_line("my_label: .section 4 (0xFFFF, 0x1234, 0xAAAA, 0x1212)", true).unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_no_size_bytes_section() {
+        validate_asm_line("my_label: .section [0xFFFF, 0x1234, 0xAAAA, 0x1212]", true).unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_bytes_section_item_too_large() {
+        validate_asm_line("my_label: .section [0xFFFFF, 0x1234, 0xAAAA, 0x1212]", true).unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_bytes_section_invalid_item() {
+        validate_asm_line("my_label: .section [0xFFFFF, 0x1234, 'a', 0x1212]", true).unwrap();
     }
 }
