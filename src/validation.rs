@@ -10,10 +10,38 @@ pub fn validate_asm_line(line:&str, data_mode:bool) -> Result<(), AsmValidationE
     // validate if the line is not just a label
     if !line.ends_with(":") {
         if !data_mode {
-            let opcode = validate_opcode(line)?;
+            let opcode = match validate_opcode(line) {
+                Ok(val) => val,
+                Err(e) => {
+                    match validate_data_type(line) {
+                        Ok(_) => {
+                            return Err(AsmValidationError(format!("{} is for data, but is in the instructions section, which is invalid", line)));
+                        },
+
+                        Err(_) => {
+                            return Err(e);
+                        }
+                    }
+                }
+            };
+
             validate_operands(line, opcode)?;
         } else {
-            let data_type = validate_data_type(line)?;
+            let data_type = match validate_data_type(line) {
+                Ok(val) => val,
+                Err(e) => {
+                    match validate_opcode(line) {
+                        Ok(_) => {
+                            return Err(AsmValidationError(format!("{} is an instruction, but is in the data section, which is invalid", line)));
+                        },
+
+                        Err(_) => {
+                            return Err(e);
+                        }
+                    }
+                }
+            };
+
             validate_data_format(line, data_type)?;
         }
     }
@@ -92,7 +120,6 @@ fn validate_float_immediate(line:&str, immediate:&str, short:bool) -> Result<(),
 /// Takes a character immediate in the format `'<char>'` and checks that it is a valid UTF-8 character in 
 /// that format. If not, an `AsmValidationError` is returned.
 fn validate_char_immediate(line:&str, immediate:&str) -> Result<(), AsmValidationError> {
-    println!("{}", immediate);
     if !immediate.starts_with("'") || !immediate.ends_with("'") {
         return Err(AsmValidationError(format!(
             "Immediate {} on line \"{}\" is not in a valid format - should be label: .char '<char>'", 
@@ -152,6 +179,7 @@ fn validate_char_instr(line:&str) -> Result<(), AsmValidationError> {
 /// ASSUMES LABEL HAS ALREADY BEEN REMOVED!
 fn get_valid_array_size(line:&str) -> Result<i64, AsmValidationError> {
     let tokens:Vec<&str> = line.split(" ").collect();
+    println!("Tokens: {:?}", tokens);
     match i64::from_str_radix(tokens[1].trim(), 10) {
         Ok(val) => Ok(val),
         Err(_) => {
@@ -234,7 +262,7 @@ fn validate_bytes_section_instr(line:&str) -> Result<(), AsmValidationError> {
                                         .filter(|item| item != &"")
                                         .collect();
     for item in &array_contents {
-        validate_int_immediate(item, 32, true)?;
+        validate_int_immediate(item, 16, true)?;
     }
 
     if array_contents.len() > array_size.try_into().unwrap() {
@@ -350,41 +378,48 @@ fn validate_register(register:&str) -> Result<(), AsmValidationError> {
 /// format given the prefix (0x for hexadecimal and 0b for binary, no prefix for decimal).
 fn validate_int_immediate(operand:&str, bits:i16, signed:bool) -> Result<(), AsmValidationError> {
     let immediate:i64;
+    let decimal:bool;
     if operand.starts_with("0b") {
         immediate = match i64::from_str_radix(&operand[2..], 2) {
             Ok(val) => val,
             Err(_) => {
                 return Err(AsmValidationError(format!("Could not parse binary immediate {}", operand)));
             }
-        }
+        };
+
+        decimal = false;
     } else if operand.starts_with("0x") {
         immediate = match i64::from_str_radix(&operand[2..], 16) {
             Ok(val) => val,
             Err(_) => {
                 return Err(AsmValidationError(format!("Could not parse hexadecimal immediate {}", operand)));
             }
-        }
+        };
+
+        decimal = false;
     } else {
         immediate = match operand.parse() {
             Ok(val) => val,
             Err(_) => {
                 return Err(AsmValidationError(format!("Could not parse immediate {}", operand)));
             }
-        }
+        };
+
+        decimal = true;
     }
 
-    let max_immediate = match signed {
-        true => ((2_i64.pow(bits.try_into().unwrap())) / 2) - 1,
-        false => (2_i64.pow(bits.try_into().unwrap())) - 1
-    };
+    let max_immediate:i64;
+    let min_immediate:i64;
+    if signed && decimal {
+        max_immediate = ((2_i64.pow(bits.try_into().unwrap())) / 2) - 1;
+        min_immediate = -((2_i64.pow(bits.try_into().unwrap())) / 2);
+    } else {
+        max_immediate = (2_i64.pow(bits.try_into().unwrap())) - 1;
+        min_immediate = 0;
+    }
 
-    let min_immediate = match signed {
-        true => -((2_i64.pow(bits.try_into().unwrap())) / 2),
-        false => 0
-    };
-
-
-    if immediate < 0 && !signed {
+    println!("Immediate: {} vs max: {} for bits: {}", immediate, max_immediate, bits);
+    if immediate < 0 && !(signed && decimal) {
         return Err(AsmValidationError(format!("Unsigned immediate operand {} cannot be negative", operand))); 
     } else if immediate > max_immediate || (immediate < min_immediate && signed) {
         return Err(AsmValidationError(format!("Immediate {} cannot fit into {} bits", operand, bits)));
@@ -844,13 +879,27 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_bytes_section_item_too_large() {
-        validate_asm_line("my_label: .section [0xFFFFF, 0x1234, 0xAAAA, 0x1212]", true).unwrap();
+        validate_asm_line("my_label: .section 4 [0xFFFFF, 0x1234, 0xAAAA, 0x1212]", true).unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_bytes_section_invalid_item() {
-        validate_asm_line("my_label: .section [0xFFFFF, 0x1234, 'a', 0x1212]", true).unwrap();
+        validate_asm_line("my_label: .section 4 [0xFFFF, 0x1234, 'a', 0x1212]", true).unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_instr_in_data_section() {
+        validate_asm_line("my_label: .long 0xFFFFFF", false).unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_data_in_instrs_section() {
+        validate_asm_line("my_label: ADD $g0, $g1, $g2", true).unwrap();
     }
 }
