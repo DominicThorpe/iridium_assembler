@@ -5,7 +5,7 @@ use crate::errors::AsmValidationError;
 /// Takes a line of assembly code, for example `ADD $g0, $zero, $g1`, and returns an `Err` if it is not 
 /// valid Iridium assembly.
 pub fn validate_asm_line(line:&str, data_mode:bool) -> Result<(), AsmValidationError> {
-    validate_label(line)?;
+    validate_line_label(line)?;
 
     // validate if the line is not just a label
     if !line.ends_with(":") {
@@ -179,7 +179,6 @@ fn validate_char_instr(line:&str) -> Result<(), AsmValidationError> {
 /// ASSUMES LABEL HAS ALREADY BEEN REMOVED!
 fn get_valid_array_size(line:&str) -> Result<i64, AsmValidationError> {
     let tokens:Vec<&str> = line.split(" ").collect();
-    println!("Tokens: {:?}", tokens);
     match i64::from_str_radix(tokens[1].trim(), 10) {
         Ok(val) => Ok(val),
         Err(_) => {
@@ -309,7 +308,6 @@ fn validate_data_format(line:&str, data_type:&str) -> Result<(), AsmValidationEr
         },
 
         ".text" => { // label: .text "<string>"
-            println!("Found text!");
             validate_text_instr(line)?;
         },
 
@@ -418,7 +416,6 @@ fn validate_int_immediate(operand:&str, bits:i16, signed:bool) -> Result<(), Asm
         min_immediate = 0;
     }
 
-    println!("Immediate: {} vs max: {} for bits: {}", immediate, max_immediate, bits);
     if immediate < 0 && !(signed && decimal) {
         return Err(AsmValidationError(format!("Unsigned immediate operand {} cannot be negative", operand))); 
     } else if immediate > max_immediate || (immediate < min_immediate && signed) {
@@ -429,12 +426,30 @@ fn validate_int_immediate(operand:&str, bits:i16, signed:bool) -> Result<(), Asm
 }
 
 
+/// Takes an operand from an instruction and verifies that it is a valid label operand in the form
+/// @<operand> where operand contains only alphanumeric characters and underscores, and does not
+/// start with a number. 
+///
+/// Returns an `AsmValidationError` if the label operand is invalid.
+fn validate_label_operand(line:&str, operand:&str) -> Result<(), AsmValidationError> {
+    if !operand.starts_with("@") {
+        return Err(AsmValidationError(format!(
+            "{} on line {} is not a valid operand as it does not start with an '@' symbol", line, operand
+        )));
+    }
+
+    validate_operand_label(line, operand)?;
+
+    Ok(())
+}
+
+
 /// Takes a line of assembly and the associated opcode (which should already be validated), and checks 
 /// that the operands are valid
 fn validate_operands(line:&str, opcode:&str) -> Result<(), AsmValidationError> {
     let operands = get_operands_from_line(line, opcode);
     match opcode {
-        "ADD" | "SUB" | "NAND" | "OR" | "LOAD" | "STORE" => { // require 3 registers
+        "ADD" | "SUB" | "NAND" | "OR" => { // require 3 registers
             if operands.len() != 3 {
                 return Err(AsmValidationError(format!("Incorrect number of operands on line {}", line)));
             }
@@ -442,6 +457,20 @@ fn validate_operands(line:&str, opcode:&str) -> Result<(), AsmValidationError> {
             validate_register(&operands[0])?;
             validate_register(&operands[1])?;
             validate_register(&operands[2])?;
+        },
+
+        "LOAD" | "STORE" => { // requires 3 registers, optional label operand
+            if operands.len() != 3 && operands.len() != 4 {
+                return Err(AsmValidationError(format!("Incorrect number of operands on line {}", line)));
+            }
+
+            validate_register(&operands[0])?;
+            validate_register(&operands[1])?;
+            validate_register(&operands[2])?;
+
+            if operands.len() == 4 {
+                validate_label_operand(line, &operands[3])?;
+            }
         },
 
         "ADDI" | "SUBI" | "SLL" | "SRL" | "SRA" => { // require 2 registers and an immediate
@@ -454,7 +483,7 @@ fn validate_operands(line:&str, opcode:&str) -> Result<(), AsmValidationError> {
             validate_int_immediate(&operands[2], 4, false)?;
         },
 
-        "ADDC" | "SUBC" | "JUMP" | "CMP" | "JAL" | "BEQ" | "BNE" | "BLT" | "BGT" | "IN" | "OUT" => { // require 2 registers
+        "ADDC" | "SUBC" | "CMP" | "IN" | "OUT" => { // require 2 registers
             if operands.len() != 2 {
                 return Err(AsmValidationError(format!("Incorrect number of operands on line {}", line)));
             }
@@ -462,6 +491,19 @@ fn validate_operands(line:&str, opcode:&str) -> Result<(), AsmValidationError> {
             validate_register(&operands[0])?;
             validate_register(&operands[1])?;
         },
+
+        "JUMP" | "JAL" | "BEQ" | "BNE" | "BLT" | "BGT" => {
+            if operands.len() != 2 && operands.len() != 3 {
+                return Err(AsmValidationError(format!("Incorrect number of operands on line {}", line)));
+            }
+
+            validate_register(&operands[0])?;
+            validate_register(&operands[1])?;
+
+            if operands.len() == 3 {
+                validate_label_operand(line, &operands[2])?;
+            }
+        }
 
         "MOVUI" | "MOVLI" | "syscall" => { // requires a register and an 8-bit immediate
             if operands.len() != 2 {
@@ -489,14 +531,11 @@ fn validate_operands(line:&str, opcode:&str) -> Result<(), AsmValidationError> {
 }
 
 
-/// Takes a line of assembly and checks if it contains a label and, if it does, checks that the label is 
-/// valid - if not, the function will return an error.
-fn validate_label(line:&str) -> Result<(), AsmValidationError> {
-    let label = match line.find(":") {
-        Some(index) => line[..index].to_owned(),
-        None => return Ok(()),
-    };
-
+/// Takes a label and checks that it meets all the requirements, giving an `AsmValidationError` if not.
+/// The requirements for a valid label are:
+///  - Alphanumeric characters and '_' only
+///  - No digits 0-9 as the first character 
+fn validate_label(line:&str, label:&str) -> Result<(), AsmValidationError> {
     if label.chars().collect::<Vec<char>>()[0].is_numeric() {
         return Err(AsmValidationError(format!(
             "The label {} on the line {} is not valid - labels may not start with numeric characters.", label, line)
@@ -513,9 +552,40 @@ fn validate_label(line:&str) -> Result<(), AsmValidationError> {
 }
 
 
+/// Takes a line of assembly and checks if it contains a label and, if it does, checks that the label is 
+/// valid - if not, the function will return an error.
+fn validate_line_label(line:&str) -> Result<(), AsmValidationError> {
+    match line.find(":") {
+        Some(index) => validate_label(line, &line[..index])?,
+        None => return Ok(()),
+    };
+
+    Ok(())
+}
+
+
+/// Takes a label operand and checks that it is valid; if not, it will output an `AsmValidationError`.
+fn validate_operand_label(line:&str, label:&str) -> Result<(), AsmValidationError> {
+    if !label.starts_with("@") {
+        return Err(AsmValidationError(format!("Label operand {} on line {} must start with an '@' symbol", label, line)));
+    }
+
+    validate_label(line, &label[1..])?;
+
+    Ok(())
+} 
+
+
 #[cfg(test)]
 mod tests {
     use crate::validation::*;
+
+
+    #[test]
+    fn test_label_only_line() {
+        validate_asm_line("my_label1:", false).unwrap();
+        validate_asm_line("my_label1:", true).unwrap();
+    }
 
 
     #[test]
@@ -530,7 +600,7 @@ mod tests {
 
 
     #[test]
-    fn test_opcodes_with_label() {
+    fn test_opcodes_with_line_label() {
         validate_opcode("adding_nums: ADD $r0, $r1, $r2").unwrap();
         validate_opcode("noSpace:ADD $r0, $r1, $r2").unwrap();
     }
@@ -545,33 +615,33 @@ mod tests {
 
     #[test]
     fn test_valid_label() {
-        validate_label("adding_nums: ADD $r0, $r1, $r2").unwrap();
-        validate_label("adding_nums:ADD $r0, $r1, $r2").unwrap();
-        validate_label("addingNums: ADD $r0, $r1, $r2").unwrap();
-        validate_label("x: ADD $r0, $r1, $r2").unwrap();
-        validate_label("adding_nums123: ADD $r0, $r1, $r2").unwrap();
-        validate_label("add1ng_num5: ADD $r0, $r1, $r2").unwrap();
+        validate_line_label("adding_nums: ADD $r0, $r1, $r2").unwrap();
+        validate_line_label("adding_nums:ADD $r0, $r1, $r2").unwrap();
+        validate_line_label("addingNums: ADD $r0, $r1, $r2").unwrap();
+        validate_line_label("x: ADD $r0, $r1, $r2").unwrap();
+        validate_line_label("adding_nums123: ADD $r0, $r1, $r2").unwrap();
+        validate_line_label("add1ng_num5: ADD $r0, $r1, $r2").unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_invalid_label_chars() {
-        validate_label("adding-nums: ADD $r0, $r1, $r2").unwrap();
+        validate_line_label("adding-nums: ADD $r0, $r1, $r2").unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_invalid_label_start_with_num() {
-        validate_label("123adding_nums: ADD $r0, $r1, $r2").unwrap();
+        validate_line_label("123adding_nums: ADD $r0, $r1, $r2").unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_blank_label() {
-        validate_label(":ADD $r0, $r1, $r2").unwrap();
+        validate_line_label(":ADD $r0, $r1, $r2").unwrap();
     }
 
 
@@ -901,5 +971,39 @@ mod tests {
     #[should_panic]
     fn test_data_in_instrs_section() {
         validate_asm_line("my_label: ADD $g0, $g1, $g2", true).unwrap();
+    }
+
+
+    #[test]
+    fn test_opcodes_with_jump_label() {
+        validate_asm_line("JUMP $g0, $g1, @jump_label", false).unwrap();
+        validate_asm_line("JAL $g0, $g1, @jal_label", false).unwrap();
+        validate_asm_line("BEQ $g0, $g1, @beq_label", false).unwrap();
+        validate_asm_line("BNE $g0, $g1, @bne_label", false).unwrap();
+        validate_asm_line("BLT $g0, $g1, @blt_label", false).unwrap();
+        validate_asm_line("BGT $g0, $g1, @bgt_label", false).unwrap();
+        validate_asm_line("LOAD $g0, $g1, $g2, @load_label", false).unwrap();
+        validate_asm_line("STORE $g0, $g1, $g2, @store_label", false).unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_non_jump_with_jump_label() {
+        validate_asm_line("ADD $g0, $g1, $g2, @jump_label", false).unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_jump_with_invalid_jump_label() {
+        validate_asm_line("JUMP $g0, $g1, jump_label", false).unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_jump_with_invalid_jump_label_char() {
+        validate_asm_line("JUMP $g0, $g1, @jump~label", false).unwrap();
     }
 }
