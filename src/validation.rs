@@ -6,46 +6,47 @@ use crate::errors::AsmValidationError;
 /// valid Iridium assembly.
 pub fn validate_asm_line(line:&str, data_mode:bool) -> Result<(), AsmValidationError> {
     validate_line_label(line)?;
-
-    // validate if the line is not just a label
-    if !line.ends_with(":") {
-        if !data_mode {
-            let opcode = match validate_opcode(line) {
-                Ok(val) => val,
-                Err(e) => {
-                    match validate_data_type(line) {
-                        Ok(_) => {
-                            return Err(AsmValidationError(format!("{} is for data, but is in the instructions section, which is invalid", line)));
-                        },
-
-                        Err(_) => {
-                            return Err(e);
-                        }
-                    }
-                }
-            };
-
-            validate_operands(line, opcode)?;
-        } else {
-            let data_type = match validate_data_type(line) {
-                Ok(val) => val,
-                Err(e) => {
-                    match validate_opcode(line) {
-                        Ok(_) => {
-                            return Err(AsmValidationError(format!("{} is an instruction, but is in the data section, which is invalid", line)));
-                        },
-
-                        Err(_) => {
-                            return Err(e);
-                        }
-                    }
-                }
-            };
-
-            validate_data_format(line, data_type)?;
-        }
+    if line.ends_with(":") {
+        return Ok(());
     }
 
+    // validate if the line is not just a label
+    if !data_mode {
+        let opcode = match validate_opcode(line) {
+            Ok(val) => val,
+            Err(e) => {
+                match validate_data_type(line) {
+                    Ok(_) => {
+                        return Err(AsmValidationError(format!("{} is for data, but is in the instructions section, which is invalid", line)));
+                    },
+
+                    Err(_) => {
+                        return Err(e);
+                    }
+                }
+            }
+        };
+
+        validate_operands(line, opcode)?;
+        return Ok(());
+    } 
+    
+    let data_type = match validate_data_type(line) {
+        Ok(val) => val,
+        Err(e) => {
+            match validate_opcode(line) {
+                Ok(_) => {
+                    return Err(AsmValidationError(format!("{} is an instruction, but is in the data section, which is invalid", line)));
+                },
+
+                Err(_) => {
+                    return Err(e);
+                }
+            }
+        }
+    };
+
+    validate_data_format(line, data_type)?;
     Ok(())
 }
 
