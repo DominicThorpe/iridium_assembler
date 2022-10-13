@@ -331,7 +331,7 @@ pub fn validate_opcode(line:&str) -> Result<&str, AsmValidationError> {
     ];
 
     // get the opcode and remove any label there may be 
-    let opcode:&str = remove_label(line).split(" ").collect::<Vec<&str>>()[0];
+    let opcode:&str = remove_label(line).split(" ").filter(|item| *item != "").collect::<Vec<&str>>()[0];
     if !valid_opcodes.contains(&opcode) {
         return Err(AsmValidationError(format!("{} is not a valid opcode on line {}", opcode, line)));
     }
@@ -342,7 +342,7 @@ pub fn validate_opcode(line:&str) -> Result<&str, AsmValidationError> {
 
 /// Gets operands from a string by removing the operand and any comments and labels, and then split it up 
 /// using commas
-fn get_operands_from_line<'a>(line:&'a str, opcode:&str) -> Vec<String> {    
+pub fn get_operands_from_line<'a>(line:&'a str, opcode:&str) -> Vec<String> {    
     let opcode_start_index = line.find(opcode).expect(&format!("Could not find opcode {} in line {}", opcode, line));
     let opcode_end_index = opcode_start_index + opcode.len();
     let comment_start_index = line.find(";").unwrap_or(line.len());

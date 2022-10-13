@@ -5,7 +5,7 @@ use std::io::BufReader;
 
 mod errors;
 mod validation;
-mod label_table;
+mod token_generator;
 
 
 fn main() -> Result<(), errors::CmdArgsError> {
@@ -33,7 +33,7 @@ fn main() -> Result<(), errors::CmdArgsError> {
         validation::validate_asm_line(&line, data_mode).unwrap();
     }
 
-    label_table::generate_instr_label_table(cmd_args[1].to_owned());
+    let _tokens = token_generator::generate_instr_vec(&cmd_args[1]);
 
     println!("Assembly successful!");
     Ok(())

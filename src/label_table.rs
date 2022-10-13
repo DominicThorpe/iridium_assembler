@@ -53,6 +53,7 @@ mod tests {
 
 
     #[test]
+    #[ignore]
     fn test_detect_label() {
         let label_table = generate_instr_label_table("test_files/test_detect_label.asm".to_owned());
 
