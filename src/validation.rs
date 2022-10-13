@@ -52,7 +52,7 @@ pub fn validate_asm_line(line:&str, data_mode:bool) -> Result<(), AsmValidationE
 
 
 /// Takes a line of assembly and removes any label there may be
-fn remove_label(line:&str) -> &str {
+pub fn remove_label(line:&str) -> &str {
     match line.find(":") {
         Some(index) => {
             &line[index+1..].trim()
@@ -64,7 +64,7 @@ fn remove_label(line:&str) -> &str {
 
 /// Takes a line of assembly and checks if it is a valid data instruction, such as .text or .float. Returns 
 /// an `AsmValidationErr` if there is no valid data type, and returns the data type if there is.
-fn validate_data_type(line:&str) -> Result<&str, AsmValidationError> {
+pub fn validate_data_type(line:&str) -> Result<&str, AsmValidationError> {
     let valid_data_types:[&str;7] = [".int", ".long", ".half", ".float", ".section", ".char", ".text"];
     let data_type = remove_label(line).split(" ").collect::<Vec<&str>>()[0];
     if !valid_data_types.contains(&data_type) {

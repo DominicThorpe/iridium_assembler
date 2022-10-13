@@ -14,7 +14,8 @@ pub fn run_assembler(input_file:&str, output_file:&str) {
     // Iterate through each line and validate it
     let mut data_mode = false;
     let input_file = BufReader::new(OpenOptions::new().read(true).open(input_file.to_owned()).unwrap());
-    let mut _tokens:Vec<token_generator::InstrTokens> = Vec::new();
+    let mut instr_tokens:Vec<token_generator::InstrTokens> = Vec::new();
+    let mut data_tokens:Vec<token_generator::DataTokens> = Vec::new();
     let mut next_label:Option<String> = None;
     for line_buffer in input_file.lines() {
         let line = line_buffer.unwrap();
@@ -32,14 +33,28 @@ pub fn run_assembler(input_file:&str, output_file:&str) {
             if line.ends_with(":") {
                 next_label = Some(line[..line.len() - 1].to_owned());
             } else {
-                _tokens.push(token_generator::generate_instr_tokens(line, next_label.clone()));
+                instr_tokens.push(token_generator::generate_instr_tokens(line, next_label.clone()));
+                next_label = None;
+            }
+        } else {
+            if line.ends_with(":") {
+                next_label = Some(line[..line.len() - 1].to_owned());
+            } else {
+                data_tokens.push(token_generator::generate_data_tokens(line, next_label.clone()));
                 next_label = None;
             }
         }
     }
 
     println!("Label\tOpcode\tOp A\tOp B\tOp C\tImm\tOp Label");
-    for token in _tokens {
+    for token in instr_tokens {
+        println!("{:?}", token);
+    }
+
+    println!("");
+
+    println!("Label\tType\tValue");
+    for token in data_tokens {
         println!("{:?}", token);
     }
 

@@ -1,11 +1,10 @@
 use std::fmt;
-use crate::validation::{validate_opcode, get_operands_from_line};
+use crate::validation::*;
 
 
 
 /// Represents the core components of an instruction, including the opcode, and the optional label and 
 /// operands, and possible operand label
-#[allow(dead_code)]
 pub struct InstrTokens {
     label: Option<String>,
     opcode: String,
@@ -34,7 +33,7 @@ impl InstrTokens {
 
 impl fmt::Debug for InstrTokens {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}\t{}\t{}\t{}\t{}\t{}\t{}", 
+        write!(f, "{}\t{}\t{}\t{}\t{}\t0x{:04x}\t{}", 
                 self.label.as_ref().unwrap_or(&"none".to_owned()), 
                 self.opcode, 
                 self.operand_a.as_ref().unwrap_or(&"none".to_owned()), 
@@ -44,6 +43,69 @@ impl fmt::Debug for InstrTokens {
                 self.op_label.as_ref().unwrap_or(&"none".to_owned())
             )
     }
+}
+
+
+/// Represents the components of a data instruction, including the label, category, and value
+pub struct DataTokens {
+    label: String,
+    category: String,
+    bytes: Vec<u16>
+}
+
+
+impl DataTokens {
+    fn new(label:String, category:String, bytes:Vec<u16>) -> DataTokens {
+        DataTokens {
+            label: label,
+            category: category,
+            bytes: bytes
+        }
+    }
+}
+
+
+impl fmt::Debug for DataTokens {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}\t{}\t{:04x?}", self.label, self.category, self.bytes)
+    }
+}
+
+
+/// Takes some data in the form of a string which can be any data type (e.g. long, text, integer, section...) and converts it
+/// to an array of bytes
+fn get_bytes_array_from_line(category:&str, data:&str) -> Vec<u16> {
+    let data = remove_label(data);
+    let mut bytes:Vec<u16> = Vec::new();
+    match category {
+        "int" => {
+            let integer = data.split(" ").filter(|token| !token.is_empty()).collect::<Vec<&str>>()[1];
+            bytes.push(get_int_immediate_from_string(integer).try_into().unwrap());
+        },
+
+        _ => panic!("Invalid or unsupported data type: {}", category)
+    }
+
+    bytes
+}
+
+
+/// Takes a line of assembly representing a data instruction and returns its token equivalent.
+///
+/// Assumes that the line has already been validated and line is an instruction and not blank.
+pub fn generate_data_tokens(line:&str, prev_label:Option<String>) -> DataTokens {
+    let label:Option<String> = match line.find(":") {
+        Some(index) => Some(line[..index].to_owned()),
+        None => {
+            match prev_label.clone() {
+                Some(l) => Some(l.to_string()),
+                None => None
+            }
+        }
+    };
+
+    let category = &validate_data_type(line).unwrap()[1..];
+    DataTokens::new(label.unwrap(), category.to_owned(), get_bytes_array_from_line(category, line))
 }
 
 
@@ -63,11 +125,9 @@ fn get_int_immediate_from_string(immediate:&str) -> i64 {
 }
 
 
-/// Takes the name of a file and iterates through its lines, generating a `Vec<InstrTokens>` from those 
-/// lines representing their various components.
+/// Takes a line of assembly representing an instruction and generates a `InstrTokens` from it.
 ///
-/// Assumes that the file and its contents have already been validated and line is an instruction and not
-/// blank.
+/// Assumes that the line has already been validated and line is an instruction and not blank.
 pub fn generate_instr_tokens(line:&str, prev_label:Option<String>) -> InstrTokens {
     let label:Option<String> = match line.find(":") {
         Some(index) => Some(line[..index].to_owned()),
@@ -126,7 +186,7 @@ pub fn generate_instr_tokens(line:&str, prev_label:Option<String>) -> InstrToken
 
 #[cfg(test)]
 mod tests {
-    use crate::token_generator::generate_instr_tokens;
+    use crate::token_generator::*;
 
 
     #[test]
@@ -142,7 +202,7 @@ mod tests {
 
 
     #[test]
-    fn test_token_addi_all_bases() {
+    fn test_instr_token_addi_all_bases() {
         let tokens_decimal = generate_instr_tokens("init: ADDI $g0, $zero, 1", None);
         assert_eq!(*tokens_decimal.immediate.as_ref().unwrap(), 1);
 
@@ -182,5 +242,27 @@ mod tests {
     fn test_label_on_prev_line() {
         let tokens = generate_instr_tokens("JUMP $g8, $g9, @loop", Some("prev_label".to_owned())); 
         assert_eq!(tokens.label.as_ref().unwrap(), "prev_label"); 
+    }
+
+
+    #[test]
+    fn test_data_token_int() {
+        let tokens_decimal = generate_data_tokens("my_data: .int 50", None);
+        assert_eq!(tokens_decimal.label, "my_data");
+        assert_eq!(tokens_decimal.category, "int");
+        assert_eq!(tokens_decimal.bytes[0], 50);
+        assert_eq!(tokens_decimal.bytes.len(), 1);
+
+        let tokens_hex = generate_data_tokens("my_data: .int 0b0101", None);
+        assert_eq!(tokens_hex.label, "my_data");
+        assert_eq!(tokens_hex.category, "int");
+        assert_eq!(tokens_hex.bytes[0], 0b0101);
+        assert_eq!(tokens_hex.bytes.len(), 1);
+
+        let tokens_binary = generate_data_tokens("init: .int 0x001A", None);
+        assert_eq!(tokens_binary.label, "init");
+        assert_eq!(tokens_binary.category, "int");
+        assert_eq!(tokens_binary.bytes[0], 0x001A);
+        assert_eq!(tokens_binary.bytes.len(), 1);
     }
 }
