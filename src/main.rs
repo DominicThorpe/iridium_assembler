@@ -5,6 +5,7 @@ use std::io::BufReader;
 
 mod errors;
 mod validation;
+mod label_table;
 
 
 fn main() -> Result<(), errors::CmdArgsError> {
@@ -31,6 +32,8 @@ fn main() -> Result<(), errors::CmdArgsError> {
 
         validation::validate_asm_line(&line, data_mode).unwrap();
     }
+
+    label_table::generate_instr_label_table(cmd_args[1].to_owned());
 
     println!("Assembly successful!");
     Ok(())
