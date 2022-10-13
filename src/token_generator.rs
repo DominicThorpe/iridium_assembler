@@ -67,7 +67,7 @@ impl DataTokens {
 
 impl fmt::Debug for DataTokens {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}\t{}\t{:04x?}", self.label, self.category, self.bytes)
+        write!(f, "{}\t{}\t{:04X?}", self.label, self.category, self.bytes)
     }
 }
 
@@ -81,6 +81,13 @@ fn get_bytes_array_from_line(category:&str, data:&str) -> Vec<u16> {
         "int" => {
             let integer = data.split(" ").filter(|token| !token.is_empty()).collect::<Vec<&str>>()[1];
             bytes.push(get_int_immediate_from_string(integer).try_into().unwrap());
+        },
+
+        "long" => {
+            let long_str = data.split(" ").filter(|token| !token.is_empty()).collect::<Vec<&str>>()[1];
+            let long_num:u32 = get_int_immediate_from_string(long_str).try_into().unwrap();
+            bytes.push(((long_num & 0xFFFF_0000) >> 16).try_into().unwrap());
+            bytes.push((long_num & 0x0000_FFFF).try_into().unwrap());
         },
 
         _ => panic!("Invalid or unsupported data type: {}", category)
@@ -264,5 +271,30 @@ mod tests {
         assert_eq!(tokens_binary.category, "int");
         assert_eq!(tokens_binary.bytes[0], 0x001A);
         assert_eq!(tokens_binary.bytes.len(), 1);
+    }
+
+
+    #[test]
+    fn test_data_token_long() {
+        let tokens_decimal = generate_data_tokens("my_data: .long 650000000", None);
+        assert_eq!(tokens_decimal.label, "my_data");
+        assert_eq!(tokens_decimal.category, "long");
+        assert_eq!(tokens_decimal.bytes[0], 0x26BE);
+        assert_eq!(tokens_decimal.bytes[1], 0x3680);
+        assert_eq!(tokens_decimal.bytes.len(), 2);
+
+        let tokens_hex = generate_data_tokens("my_data: .long 0b01010101010101011010101010101010", None);
+        assert_eq!(tokens_hex.label, "my_data");
+        assert_eq!(tokens_hex.category, "long");
+        assert_eq!(tokens_hex.bytes[0], 0x5555);
+        assert_eq!(tokens_hex.bytes[1], 0xAAAA);
+        assert_eq!(tokens_hex.bytes.len(), 2);
+
+        let tokens_binary = generate_data_tokens("init: .long 0xFEDCBA98", None);
+        assert_eq!(tokens_binary.label, "init");
+        assert_eq!(tokens_binary.category, "long");
+        assert_eq!(tokens_binary.bytes[0], 0xFEDC);
+        assert_eq!(tokens_binary.bytes[1], 0xBA98);
+        assert_eq!(tokens_binary.bytes.len(), 2);
     }
 }
