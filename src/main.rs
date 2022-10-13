@@ -15,6 +15,7 @@ pub fn run_assembler(input_file:&str, output_file:&str) {
     let mut data_mode = false;
     let input_file = BufReader::new(OpenOptions::new().read(true).open(input_file.to_owned()).unwrap());
     let mut _tokens:Vec<token_generator::InstrTokens> = Vec::new();
+    let mut next_label:Option<String> = None;
     for line_buffer in input_file.lines() {
         let line = line_buffer.unwrap();
         let line = line.trim();
@@ -28,8 +29,18 @@ pub fn run_assembler(input_file:&str, output_file:&str) {
         validation::validate_asm_line(&line, data_mode).unwrap();
 
         if !data_mode {
-            _tokens.push(token_generator::generate_instr_tokens(line));
+            if line.ends_with(":") {
+                next_label = Some(line[..line.len() - 1].to_owned());
+            } else {
+                _tokens.push(token_generator::generate_instr_tokens(line, next_label.clone()));
+                next_label = None;
+            }
         }
+    }
+
+    println!("Label\tOpcode\tOp A\tOp B\tOp C\tImm\tOp Label");
+    for token in _tokens {
+        println!("{:?}", token);
     }
 
     println!("Assembly successful!");
