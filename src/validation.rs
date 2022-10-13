@@ -330,7 +330,7 @@ pub fn validate_opcode(line:&str) -> Result<&str, AsmValidationError> {
         "IN", "OUT", "syscall", "HALT", "NOP", "MOVLI"
     ];
 
-    // get the opcode and remove any label there may be 
+    // get the opcode and remove any label there may be
     let opcode:&str = remove_label(line).split(" ").filter(|item| *item != "").collect::<Vec<&str>>()[0];
     if !valid_opcodes.contains(&opcode) {
         return Err(AsmValidationError(format!("{} is not a valid opcode on line {}", opcode, line)));
