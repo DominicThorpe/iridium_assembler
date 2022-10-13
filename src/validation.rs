@@ -372,10 +372,10 @@ fn validate_register(register:&str) -> Result<(), AsmValidationError> {
 }
 
 
-/// Checks that a given immediate is a valid immediate and returns an `AsmValidationError` if not. Will 
-/// ensure that immediate is within the range the given number of bits can handle, and is in a valid 
+/// Checks that a given immediate is a valid immediate and returns it or an `AsmValidationError` if not. 
+/// Will ensure that immediate is within the range the given number of bits can handle, and is in a valid 
 /// format given the prefix (0x for hexadecimal and 0b for binary, no prefix for decimal).
-fn validate_int_immediate(operand:&str, bits:i16, signed:bool) -> Result<(), AsmValidationError> {
+fn validate_int_immediate(operand:&str, bits:i16, signed:bool) -> Result<i64, AsmValidationError> {
     let immediate:i64;
     let decimal:bool;
     if operand.starts_with("0b") {
@@ -423,7 +423,7 @@ fn validate_int_immediate(operand:&str, bits:i16, signed:bool) -> Result<(), Asm
         return Err(AsmValidationError(format!("Immediate {} cannot fit into {} bits", operand, bits)));
     }
 
-    Ok(())
+    Ok(immediate)
 }
 
 
