@@ -73,6 +73,19 @@ impl fmt::Debug for DataTokens {
 }
 
 
+fn convert_string_to_bytes(string:&str, vec_size:usize) -> Vec<u16> {
+    let mut buffer = [0;2];
+    let mut bytes:Vec<u16> = Vec::with_capacity(vec_size);
+
+    for index in 0..vec_size {
+        string.chars().nth(index).unwrap_or('\0').encode_utf16(&mut buffer);
+        bytes.push(((buffer[1] as u16) << 8) | (buffer[0] as u16));
+    }
+
+    bytes
+}
+
+
 /// Takes some data in the form of a string which can be any data type (e.g. long, text, integer, section...) and converts it
 /// to an array of bytes
 fn get_bytes_array_from_line(category:&str, data:&str) -> Vec<u16> {
@@ -101,6 +114,24 @@ fn get_bytes_array_from_line(category:&str, data:&str) -> Vec<u16> {
             bytes.push(((num.parse::<f32>().unwrap().to_bits() & 0xFFFF_0000) >> 16).try_into().unwrap());
             bytes.push((num.parse::<f32>().unwrap().to_bits() & 0x0000_FFFF).try_into().unwrap());
         },
+
+        "char" => {
+            let character_str = data.split(" ").filter(|token| !token.is_empty()).collect::<Vec<&str>>()[1];
+            bytes.append(&mut convert_string_to_bytes(&format!("{}", character_str.chars().nth(1).unwrap()), 1));
+        },
+
+        "text" => {
+            let text_start_index = match data.find("\"") {
+                Some(index) => index,
+                None => panic!("{} dot not contain a valid text string", data)
+            };
+
+            let text = data[text_start_index..].to_owned();
+            let size:usize = data.split(" ").filter(|token| !token.is_empty())
+                                            .collect::<Vec<&str>>()[1]
+                                            .parse().unwrap();
+            bytes.append(&mut convert_string_to_bytes(&text[1..text.len() - 1], size));
+        }
 
         _ => panic!("Invalid or unsupported data type: {}", category)
     }
@@ -329,5 +360,51 @@ mod tests {
         assert_eq!(tokens.bytes[0], 0xC542);
         assert_eq!(tokens.bytes[1], 0x0C30);
         assert_eq!(tokens.bytes.len(), 2);
+    }
+
+
+    #[test]
+    fn test_data_token_char() {
+        let tokens = generate_data_tokens("character: .char 'ß", None);
+        assert_eq!(tokens.label, "character");
+        assert_eq!(tokens.category, "char");
+        assert_eq!(tokens.bytes[0], 0x00DF);
+        assert_eq!(tokens.bytes.len(), 1);
+    }
+
+
+    #[test]
+    fn test_text_exact_length() {
+        let tokens = generate_data_tokens("txt: .text 7 \"Hello!\"", None);
+        assert_eq!(tokens.label, "txt");
+        assert_eq!(tokens.category, "text");
+        assert_eq!(tokens.bytes[0], 0x0048);
+        assert_eq!(tokens.bytes[1], 0x0065);
+        assert_eq!(tokens.bytes[5], 0x0021);
+        assert_eq!(tokens.bytes[6], 0x0000);
+        assert_eq!(tokens.bytes.len(), 7);
+    }
+
+
+    #[test]
+    fn test_text_non_exact_length() {
+        let tokens = generate_data_tokens("txt: .text 10 \"Hello!\"", None);
+        assert_eq!(tokens.label, "txt");
+        assert_eq!(tokens.category, "text");
+        assert_eq!(tokens.bytes[0], 0x0048);
+        assert_eq!(tokens.bytes[1], 0x0065);
+        assert_eq!(tokens.bytes[5], 0x0021);
+        assert_eq!(tokens.bytes[6], 0x0000);
+        assert_eq!(tokens.bytes[9], 0x0000);
+        assert_eq!(tokens.bytes.len(), 10);
+    }
+
+
+    #[test]
+    fn test_text_non_latin_text() {
+        let tokens = generate_data_tokens("chinese: .text 6 \"你好世界!\"", None);
+        assert_eq!(tokens.label, "chinese");
+        assert_eq!(tokens.category, "text");
+        assert_eq!(tokens.bytes.len(), 6);
     }
 }

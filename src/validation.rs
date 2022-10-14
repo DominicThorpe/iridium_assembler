@@ -129,19 +129,14 @@ fn validate_char_immediate(line:&str, immediate:&str) -> Result<(), AsmValidatio
     }
 
     let imm_char:&str = &immediate[1..immediate.len() - 1];
-    if imm_char.len() != 1 {
+    if imm_char.chars().collect::<Vec<char>>().len() != 1 {
         return Err(AsmValidationError(format!(
             "Immediate {} on line \"{}\" is not in a valid format - more than 1 character found", 
             immediate, line
         )));
     }
 
-    match str::from_utf8(imm_char.as_bytes()) {
-        Ok(_) => Ok(()),
-        Err(_) => Err(AsmValidationError(format!(
-            "Immediate {} on line \"{}\" is not a valid UTF-8 character", immediate, line
-        )))
-    }
+    Ok(())
 }
 
 
@@ -223,7 +218,7 @@ fn validate_text_instr(line:&str) -> Result<(), AsmValidationError> {
         }
     };
 
-    let str_len = text.len() - 1;
+    let str_len = text.chars().collect::<Vec<char>>().len() - 1;
     if str_len > array_size.try_into().unwrap() {
         return Err(AsmValidationError(format!(
             "Text is too long for {} bytes on line {}. Have you taken the null terminator into account?",
@@ -856,15 +851,9 @@ mod tests {
         validate_asm_line("my_label: .char 'b'", true).unwrap();
         validate_asm_line("my_label: .char '.'", true).unwrap();
         validate_asm_line("my_label: .char ' '", true).unwrap();
+        validate_asm_line("my_label: .char '你'", true).unwrap();
         validate_asm_line("my_label: .char '\t'", true).unwrap();
         validate_asm_line("my_label: .char '\n'", true).unwrap();
-    }
-
-
-    #[test]
-    #[should_panic]
-    fn test_invalid_char_data() {
-        validate_asm_line("my_label: .char '你'", true).unwrap();
     }
 
 
@@ -892,6 +881,7 @@ mod tests {
     #[test]
     fn test_valid_text() {
         validate_asm_line("my_text: .text 13 \"Hello world!\"", true).unwrap();
+        validate_asm_line("my_text: .text 8 \"你好我很高兴!\"", true).unwrap();
         validate_asm_line("empty_text: .text 1 \"\"", true).unwrap();
         validate_asm_line("multiline:.text 50 \"My longer\nparagraph of some\rgood text\"", true).unwrap();
     }
