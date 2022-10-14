@@ -131,7 +131,28 @@ fn get_bytes_array_from_line(category:&str, data:&str) -> Vec<u16> {
                                             .collect::<Vec<&str>>()[1]
                                             .parse().unwrap();
             bytes.append(&mut convert_string_to_bytes(&text[1..text.len() - 1], size));
-        }
+        },
+
+        "section" => {
+            let section_str = match data.find("[") {
+                Some(index) => data[index + 1..data.len() - 1].to_owned(),
+                None => panic!("{} is not a valid section", data)
+            };
+
+            let size:usize = data.split(" ").filter(|token| !token.trim().is_empty())
+                                            .collect::<Vec<&str>>()[1]
+                                            .parse().unwrap();
+
+            let mut bytes_array:Vec<u16> = section_str.split(",")
+                                    .filter(|item| !item.is_empty() && item != &" ")
+                                    .map(|item| get_int_immediate_from_string(item.trim()).try_into().unwrap())
+                                    .collect();
+            while bytes_array.len() < size {
+                bytes_array.push(0x0000);
+            }
+
+            bytes.append(&mut bytes_array);
+        },
 
         _ => panic!("Invalid or unsupported data type: {}", category)
     }
@@ -162,6 +183,7 @@ pub fn generate_data_tokens(line:&str, prev_label:Option<String>) -> DataTokens 
 /// Takes a string of an integer in binary, decimal, or hexadecimal and returns it. Assumes that the
 /// input has already been validated.
 fn get_int_immediate_from_string(immediate:&str) -> i64 {
+    println!("Imm: {}", immediate);
     let parsed_immediate:i64;
     if immediate.starts_with("0x") {
         parsed_immediate = i64::from_str_radix(&immediate[2..], 16).unwrap();
@@ -405,6 +427,31 @@ mod tests {
         let tokens = generate_data_tokens("chinese: .text 6 \"你好世界!\"", None);
         assert_eq!(tokens.label, "chinese");
         assert_eq!(tokens.category, "text");
+        assert_eq!(tokens.bytes.len(), 6);
+    }
+
+
+    #[test]
+    fn test_section_exact_length() {
+        let tokens = generate_data_tokens("data_pts: .section 4 [0x0100, 0b0011, 10, 0x00A4]", None);
+        assert_eq!(tokens.label, "data_pts");
+        assert_eq!(tokens.category, "section");
+        assert_eq!(tokens.bytes[0], 0x0100);
+        assert_eq!(tokens.bytes[1], 0x0003);
+        assert_eq!(tokens.bytes[2], 0x000A);
+        assert_eq!(tokens.bytes[3], 0x00A4);
+        assert_eq!(tokens.bytes.len(), 4);
+    }
+
+
+    #[test]
+    fn test_section_non_exact_length() {
+        let tokens = generate_data_tokens("data_pts: .section 6 [0x0100, 0b0011, 10, 0x00A4]", None);
+        assert_eq!(tokens.label, "data_pts");
+        assert_eq!(tokens.category, "section");
+        assert_eq!(tokens.bytes[3], 0x00A4);
+        assert_eq!(tokens.bytes[4], 0x0000);
+        assert_eq!(tokens.bytes[5], 0x0000);
         assert_eq!(tokens.bytes.len(), 6);
     }
 }
