@@ -1,4 +1,5 @@
 use std::fmt;
+use half::f16;
 use crate::validation::*;
 
 
@@ -88,6 +89,17 @@ fn get_bytes_array_from_line(category:&str, data:&str) -> Vec<u16> {
             let long_num:u32 = get_int_immediate_from_string(long_str).try_into().unwrap();
             bytes.push(((long_num & 0xFFFF_0000) >> 16).try_into().unwrap());
             bytes.push((long_num & 0x0000_FFFF).try_into().unwrap());
+        },
+
+        "half" => {
+            let num = data.split(" ").filter(|token| !token.is_empty()).collect::<Vec<&str>>()[1];
+            bytes.push(f16::from_f32(num.parse().unwrap()).to_bits());
+        },
+
+        "float" => {
+            let num = data.split(" ").filter(|token| !token.is_empty()).collect::<Vec<&str>>()[1];
+            bytes.push(((num.parse::<f32>().unwrap().to_bits() & 0xFFFF_0000) >> 16).try_into().unwrap());
+            bytes.push((num.parse::<f32>().unwrap().to_bits() & 0x0000_FFFF).try_into().unwrap());
         },
 
         _ => panic!("Invalid or unsupported data type: {}", category)
@@ -296,5 +308,26 @@ mod tests {
         assert_eq!(tokens_binary.bytes[0], 0xFEDC);
         assert_eq!(tokens_binary.bytes[1], 0xBA98);
         assert_eq!(tokens_binary.bytes.len(), 2);
+    }
+
+
+    #[test]
+    fn test_data_token_half() {
+        let tokens = generate_data_tokens(".half 5.25", Some("prev_label".to_owned()));
+        assert_eq!(tokens.label, "prev_label");
+        assert_eq!(tokens.category, "half");
+        assert_eq!(tokens.bytes[0], 0x4540);
+        assert_eq!(tokens.bytes.len(), 1);
+    }
+
+
+    #[test]
+    fn test_data_token_float() {
+        let tokens = generate_data_tokens(".float -3104.76171875", Some("prev_label".to_owned()));
+        assert_eq!(tokens.label, "prev_label");
+        assert_eq!(tokens.category, "float");
+        assert_eq!(tokens.bytes[0], 0xC542);
+        assert_eq!(tokens.bytes[1], 0x0C30);
+        assert_eq!(tokens.bytes.len(), 2);
     }
 }
