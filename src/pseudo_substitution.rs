@@ -30,7 +30,7 @@ pub fn substitute_pseudo_instrs(tokens: Vec<FileTokens>) -> Vec<FileTokens> {
             },
 
             FileTokens::DataTokens(_) => {
-                // TODO: handle the DataTokens case
+                new_tokens.push(token.clone());
             }
         }
     }
