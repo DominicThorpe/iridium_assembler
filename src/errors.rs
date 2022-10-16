@@ -7,7 +7,7 @@ use std::error::Error;
 pub struct CmdArgsError;
 impl Error for CmdArgsError {}
 
-/// Ensures that the CmdArgsError error type is displayed appropriately in the console when raised.
+/// Ensures that the `CmdArgsError` error type is displayed appropriately in the console when raised.
 impl fmt::Display for CmdArgsError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Incorrect number or format of command line instructions. Proper usage is 'iridium_assembler [source filename] [target_filename]'")
@@ -20,9 +20,24 @@ impl fmt::Display for CmdArgsError {
 pub struct AsmValidationError(pub String);
 impl Error for AsmValidationError {}
 
-/// Ensures that the AsmValidationError error type is displayed appropriately in the console when raised, including a custom string to add to the error.
+/// Ensures that the `AsmValidationError` error type is displayed appropriately in the console when raised, 
+/// including a custom string to add to the error.
 impl fmt::Display for AsmValidationError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Found invalid instruction: {}", self.0)
+    }
+}
+
+
+/// Used if the wrong type of token is detected after processing the file into tokens
+#[derive(Debug, Clone)]
+pub struct TokenTypeError(pub String);
+impl Error for TokenTypeError {}
+
+/// Ensures that the `TokenTypeError` error type is displayed appropriately in the console when raised, 
+/// including a custom string to add to the error.
+impl fmt::Display for TokenTypeError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Found invalid token type: {}", self.0)
     }
 }

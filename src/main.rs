@@ -7,24 +7,16 @@ mod errors;
 mod validation;
 mod token_generator;
 mod label_table;
+mod pseudo_substitution;
+mod token_types;
 
 
-/// Can contain both types of tokens a line of asm can take
-#[derive(Debug)]
-pub enum FileTokens {
-    InstrTokens(token_generator::InstrTokens),
-    DataTokens(token_generator::DataTokens)
-}
-
-
-/// Takes a filename and returns a `FileTokens`
-pub fn process_file_into_tokens(input_file:&str) -> Vec<FileTokens> {
+/// Takes a filename and returns a `Vec<FileTokens>` representing the tokens of all the lines of assembly in the file
+/// which can be either `DataTokens` or `InstrTokens`.
+pub fn process_file_into_tokens(input_file:&str) -> Vec<token_types::FileTokens> {
     let mut data_mode = false;
     let input_file = BufReader::new(OpenOptions::new().read(true).open(input_file.to_owned()).unwrap());
-    // let mut instr_tokens:Vec<token_generator::InstrTokens> = Vec::new();
-    // let mut data_tokens:Vec<token_generator::DataTokens> = Vec::new();
-
-    let mut tokens:Vec<FileTokens> = Vec::new();
+    let mut tokens:Vec<token_types::FileTokens> = Vec::new();
     let mut next_label:Option<String> = None;
     for line_buffer in input_file.lines() {
         let line = line_buffer.unwrap();
@@ -42,14 +34,14 @@ pub fn process_file_into_tokens(input_file:&str) -> Vec<FileTokens> {
             if line.ends_with(":") {
                 next_label = Some(line[..line.len() - 1].to_owned());
             } else {
-                tokens.push(FileTokens::InstrTokens(token_generator::generate_instr_tokens(line, next_label.clone())));
+                tokens.push(token_types::FileTokens::InstrTokens(token_generator::generate_instr_tokens(line, next_label.clone())));
                 next_label = None;
             }
         } else {
             if line.ends_with(":") {
                 next_label = Some(line[..line.len() - 1].to_owned());
             } else {
-                tokens.push(FileTokens::DataTokens(token_generator::generate_data_tokens(line, next_label.clone())));
+                tokens.push(token_types::FileTokens::DataTokens(token_generator::generate_data_tokens(line, next_label.clone())));
                 next_label = None;
             }
         }
@@ -78,9 +70,14 @@ fn main() -> Result<(), errors::CmdArgsError> {
     println!("Assembling {} into {}", cmd_args[1], cmd_args[2]);
 
     let tokens = process_file_into_tokens(&cmd_args[1]);
-    let label_table = label_table::generate_instr_label_table(tokens);
+    let tokens = pseudo_substitution::substitute_pseudo_instrs(tokens);
+    let label_table = label_table::generate_instr_label_table(&tokens);
     for (label, line) in label_table {
         println!("{:<16} {:06x}", label, line);
+    }
+
+    for token in tokens {
+        println!("{:?}", token);
     }
 
     println!("Assembly successful!");

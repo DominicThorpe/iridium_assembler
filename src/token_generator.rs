@@ -1,76 +1,7 @@
-use std::fmt;
 use half::f16;
 use crate::validation::*;
+use crate::token_types::{InstrTokens, DataTokens};
 
-
-
-/// Represents the core components of an instruction, including the opcode, and the optional label and 
-/// operands, and possible operand label
-pub struct InstrTokens {
-    pub label: Option<String>,
-    opcode: String,
-    operand_a: Option<String>,
-    operand_b: Option<String>,
-    operand_c: Option<String>,
-    immediate: Option<u64>, // used as a set of bytes
-    op_label: Option<String>
-}
-
-impl InstrTokens {
-    fn new(label:Option<String>, opcode:String, operand_a:Option<String>, 
-        operand_b:Option<String>, operand_c:Option<String>, immediate:Option<u64>, 
-        op_label:Option<String>) -> InstrTokens {
-            InstrTokens {
-                label: label,
-                opcode: opcode,
-                operand_a: operand_a,
-                operand_b: operand_b,
-                operand_c: operand_c,
-                immediate: immediate,
-                op_label: op_label
-            }
-    }
-}
-
-impl fmt::Debug for InstrTokens {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}\t{}\t{}\t{}\t{}\t0x{:04x}\t{}", 
-                self.label.as_ref().unwrap_or(&"none".to_owned()), 
-                self.opcode, 
-                self.operand_a.as_ref().unwrap_or(&"none".to_owned()), 
-                self.operand_b.as_ref().unwrap_or(&"none".to_owned()),
-                self.operand_c.as_ref().unwrap_or(&"none".to_owned()), 
-                self.immediate.unwrap_or(0), 
-                self.op_label.as_ref().unwrap_or(&"none".to_owned())
-            )
-    }
-}
-
-
-/// Represents the components of a data instruction, including the label, category, and value
-pub struct DataTokens {
-    pub label: Option<String>,
-    category: String,
-    bytes: Vec<u16>
-}
-
-
-impl DataTokens {
-    fn new(label:Option<String>, category:String, bytes:Vec<u16>) -> DataTokens {
-        DataTokens {
-            label: label,
-            category: category,
-            bytes: bytes
-        }
-    }
-}
-
-
-impl fmt::Debug for DataTokens {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}\t{}\t{:04X?}", self.label.clone().unwrap_or("null".to_string()), self.category, self.bytes)
-    }
-}
 
 
 fn convert_string_to_bytes(string:&str, vec_size:usize) -> Vec<u16> {
@@ -219,14 +150,20 @@ pub fn generate_instr_tokens(line:&str, prev_label:Option<String>) -> InstrToken
         0 => InstrTokens::new(label, opcode.to_owned(), None, None, None, None, None),
         1 => InstrTokens::new(label, opcode.to_owned(), Some(operands[0].clone()), None, None, None, None),
         2 => {
-            if !operands[1].starts_with("$") {
-                InstrTokens::new(label.clone(), opcode.to_owned(), Some(operands[0].clone()), None, None, 
+            let tokens:InstrTokens;
+            if operands[1].starts_with("$") {
+                tokens = InstrTokens::new(label.clone(), opcode.to_owned(), Some(operands[0].clone()), 
+                                                Some(operands[1].clone()), None, None, None);
+            } else if operands[1].starts_with("@") {
+                tokens = InstrTokens::new(label.clone(), opcode.to_owned(), Some(operands[0].clone()), None, None, 
+                                                None, Some(operands[1].clone()));
+            } else {
+                tokens = InstrTokens::new(label.clone(), opcode.to_owned(), Some(operands[0].clone()), None, None, 
                                                 Some(get_int_immediate_from_string(&operands[1])
                                                         .try_into().unwrap()), None);
             }
 
-            InstrTokens::new(label, opcode.to_owned(), Some(operands[0].clone()), 
-                                                Some(operands[1].clone()), None, None, None)
+            tokens
         },
 
         4 => InstrTokens::new(label, opcode.to_owned(), Some(operands[0].clone()), 
@@ -288,11 +225,33 @@ mod tests {
     #[test]
     fn test_load_token_generation_with_label_opcode() {
         let tokens = generate_instr_tokens("LOAD $g5, $g8, $g9, @target", None);
-        assert_eq!(tokens.label.as_ref().unwrap_or(&"none".to_owned()), &"none".to_owned());
+        assert_eq!(tokens.label.as_ref().unwrap_or(&"none".to_owned()), "none");
         assert_eq!(tokens.opcode, "LOAD");
         assert_eq!(tokens.operand_a.as_ref().unwrap(), "$g5");
         assert_eq!(tokens.operand_b.as_ref().unwrap(), "$g8");
         assert_eq!(tokens.operand_c.as_ref().unwrap(), "$g9");
+        assert_eq!(tokens.op_label.as_ref().unwrap(), "@target");
+    }
+
+
+    #[test]
+    fn test_movli_with_label_opcode() {
+        let tokens = generate_instr_tokens("MOVLI $g0, @target", None);
+        assert_eq!(tokens.label.as_ref().unwrap_or(&"none".to_owned()), "none");
+        assert_eq!(tokens.opcode, "MOVLI");
+        assert_eq!(tokens.operand_a.as_ref().unwrap(), "$g0");
+        assert_eq!(tokens.operand_b.as_ref().unwrap_or(&"none".to_owned()), "none");
+        assert_eq!(tokens.operand_c.as_ref().unwrap_or(&"none".to_owned()), "none");
+        assert_eq!(tokens.op_label.as_ref().unwrap(), "@target");
+    }
+
+
+    #[test]
+    fn test_movui_with_label_opcode() {
+        let tokens = generate_instr_tokens("MOVUI $g0, @target", None);
+        assert_eq!(tokens.label.as_ref().unwrap_or(&"none".to_owned()), "none");
+        assert_eq!(tokens.opcode, "MOVUI");
+        assert_eq!(tokens.operand_a.as_ref().unwrap(), "$g0");
         assert_eq!(tokens.op_label.as_ref().unwrap(), "@target");
     }
 

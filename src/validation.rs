@@ -501,7 +501,20 @@ fn validate_operands(line:&str, opcode:&str) -> Result<(), AsmValidationError> {
             }
         }
 
-        "MOVUI" | "MOVLI" | "syscall" => { // requires a register and an 8-bit immediate
+        "MOVUI" | "MOVLI" => {
+            if operands.len() != 2 {
+                return Err(AsmValidationError(format!("Incorrect number of operands on line {}", line)));
+            }
+
+            validate_register(&operands[0])?;
+            if operands[1].starts_with("@") {
+                validate_label_operand(line, &operands[1])?;
+            } else {
+                validate_int_immediate(&operands[1], 8, false)?;
+            }
+        }
+        
+        "syscall" => { // requires a register and an 8-bit immediate
             if operands.len() != 2 {
                 return Err(AsmValidationError(format!("Incorrect number of operands on line {}", line)));
             }
@@ -975,6 +988,15 @@ mod tests {
         validate_asm_line("BGT $g0, $g1, @bgt_label", false).unwrap();
         validate_asm_line("LOAD $g0, $g1, $g2, @load_label", false).unwrap();
         validate_asm_line("STORE $g0, $g1, $g2, @store_label", false).unwrap();
+        validate_asm_line("MOVUI $g0, @movui_label", false).unwrap();
+        validate_asm_line("MOVLI $g0, @movli_label", false).unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_movli_with_invalid_label() {
+        validate_asm_line("ADD $g0, $g1, $g2, jump_label", false).unwrap();
     }
 
 
