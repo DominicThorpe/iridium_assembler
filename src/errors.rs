@@ -41,3 +41,19 @@ impl fmt::Display for TokenTypeError {
         write!(f, "Found invalid token type: {}", self.0)
     }
 }
+
+
+
+/// Used if a non-existant label is used
+#[derive(Debug, Clone)]
+pub struct LabelNotFoundError(pub String);
+impl Error for LabelNotFoundError {}
+
+/// Ensures that the `LabelNotFoundError` error type is displayed appropriately in the console when raised, 
+/// including a custom string to add to the error.
+impl fmt::Display for LabelNotFoundError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Found invalid label: {}", self.0)
+    }
+}
+

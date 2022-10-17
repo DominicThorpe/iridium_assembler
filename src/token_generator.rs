@@ -4,6 +4,11 @@ use crate::token_types::{InstrTokens, DataTokens};
 
 
 
+/// Takes a string representing an array of bytes, such as [0x0123, 0x5555, 0xABCD], and the size of
+/// the array, including any null bytes, and returns an array of 16-bit values representing that array
+/// as `u16`s.
+///
+/// Will panic if the vec_size is too small.
 fn convert_string_to_bytes(string:&str, vec_size:usize) -> Vec<u16> {
     let mut buffer = [0;2];
     let mut bytes:Vec<u16> = Vec::with_capacity(vec_size);

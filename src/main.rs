@@ -72,13 +72,15 @@ fn main() -> Result<(), errors::CmdArgsError> {
     let tokens = process_file_into_tokens(&cmd_args[1]);
     let tokens = pseudo_substitution::substitute_pseudo_instrs(tokens);
     let label_table = label_table::generate_label_table(&tokens);
+    let tokens = pseudo_substitution::substitute_labels(tokens, &label_table).unwrap();
 
     let mut sorted_vec:Vec<_> = label_table.iter().collect();
     sorted_vec.sort_by(|a, b| a.1.cmp(b.1));
     for (label, line) in sorted_vec {
         println!("{:<16} {:06X}", label, line);
     }
-
+    
+    println!("Len: {}", tokens.len());
     for token in tokens {
         println!("{:?}", token);
     }
