@@ -7,8 +7,8 @@ use crate::token_types::FileTokens;
 
 
 
-/// Takes a token in the form of a `FileTokens` struct and converts it into bytes which can be written to a file or printed.
-pub fn get_binary_from_tokens(tokens:FileTokens) -> Result<u16, TokenTypeError> {
+/// Takes a token in the form of a `FileTokens` struct and converts it into a vector f bytes which can be written to a file or printed.
+pub fn get_binary_from_tokens(tokens:FileTokens) -> Result<Vec<u16>, TokenTypeError> {
     let opcode_binaries:HashMap<String, u16> = HashMap::from([
         ("NOP".to_owned(), 0x0000), ("ADD".to_owned(), 0x1000), ("SUB".to_owned(), 0x2000), ("ADDI".to_owned(), 0x3000), ("SUBI".to_owned(), 0x4000), 
         ("SLL".to_owned(), 0x5000), ("SRL".to_owned(), 0x6000), ("SRA".to_owned(), 0x7000), ("NAND".to_owned(), 0x8000), ("OR".to_owned(), 0x9000), 
@@ -24,9 +24,9 @@ pub fn get_binary_from_tokens(tokens:FileTokens) -> Result<u16, TokenTypeError> 
         ("$sp".to_owned(), 0xC),   ("$fp".to_owned(), 0xD), ("$ra".to_owned(), 0xE), ("$pc".to_owned(), 0xF)
     ]);
 
-    let mut binary:u16 = 0x0000;
     match tokens {
         FileTokens::InstrTokens(t) => {
+            let mut binary:u16 = 0x0000;
             let opcode = *opcode_binaries.get(&t.opcode).unwrap();
             binary |= opcode;
 
@@ -39,8 +39,8 @@ pub fn get_binary_from_tokens(tokens:FileTokens) -> Result<u16, TokenTypeError> 
             }
 
             match opcode {
-                0x0000 => { return Ok(0x0000); }, // NOP is all 0s
-                0xFFFF => { return Ok(0xFFFF); }, // HALT is all 1s
+                0x0000 => { return Ok(vec![0x0000]); }, // NOP is all 0s
+                0xFFFF => { return Ok(vec![0xFFFF]); }, // HALT is all 1s
 
                 0x1000 | 0x2000 | 0x5000 | 0x6000 | 0x7000 | 0x8000 | 0x9000 | 0xA000 | 0xB000 => { // rrr format
                     binary |= (*register_binaries.get(&t.operand_b.unwrap_or("$zero".to_owned())).unwrap() << 4) as u16;
@@ -67,26 +67,40 @@ pub fn get_binary_from_tokens(tokens:FileTokens) -> Result<u16, TokenTypeError> 
 
                 _ => { // TODO: replace with an error
                     return Err(TokenTypeError(format!("{} is not a valid opcode", opcode)));
-                } 
+                }
             }
+
+            return Ok(vec![binary]);
         },
 
-        FileTokens::DataTokens(_) => {
-
+        FileTokens::DataTokens(t) => {
+            return Ok(t.bytes);
         }
     }
-
-    Ok(binary)
 }
 
 
-/// Takes a `Vec<FileTokens>` as input and converts it to binary, then writes it to the given file
+/// Takes a `Vec<FileTokens>` as input and converts it to binary[0], then writes it to the given file
 pub fn generate_binary(filename:&str, tokens:&Vec<FileTokens>) -> Result<(), Box<dyn Error>> {
+    let mut data_mode = false;
     let mut output_file = BufWriter::new(OpenOptions::new().create(true).write(true).open(filename.to_owned()).unwrap());
     for token in tokens {
-        let binary = get_binary_from_tokens(token.clone()).unwrap();
-        output_file.write(&[((binary & 0xFF00) >> 8) as u8])?;
-        output_file.write(&[(binary & 0x00FF) as u8])?;
+        let binary_vec = match token {
+            FileTokens::InstrTokens(_) => get_binary_from_tokens(token.clone()).unwrap(),
+            FileTokens::DataTokens(_) => {
+                if !data_mode {
+                    data_mode = true;
+                    output_file.write("data:".as_bytes())?;
+                }
+                
+                get_binary_from_tokens(token.clone()).unwrap()
+            }
+        };
+
+        for binary in binary_vec {
+            output_file.write(&[((binary & 0xFF00) >> 8) as u8])?;
+            output_file.write(&[(binary & 0x00FF) as u8])?;
+        }
     }
 
     Ok(())
@@ -103,7 +117,7 @@ mod tests {
     fn test_nop_token() {
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "NOP".to_string(), None, None, None, None, None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary, 0x0000);
+        assert_eq!(binary[0], 0x0000);
     }
 
 
@@ -111,7 +125,7 @@ mod tests {
     fn test_halt_token() {
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "HALT".to_string(), None, None, None, None, None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary, 0xFFFF);
+        assert_eq!(binary[0], 0xFFFF);
     }
 
 
@@ -119,39 +133,39 @@ mod tests {
     fn test_rrr_tokens() {
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "ADD".to_string(), Some("$g0".to_string()), Some("$zero".to_string()), Some("$g1".to_string()), None, None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary, 0x1102);
+        assert_eq!(binary[0], 0x1102);
 
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "SUB".to_string(), Some("$g2".to_string()), Some("$g3".to_string()), Some("$g4".to_string()), None, None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary, 0x2345);
+        assert_eq!(binary[0], 0x2345);
 
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "SLL".to_string(), Some("$g5".to_string()), Some("$g6".to_string()), Some("$g7".to_string()), None, None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary, 0x5678);
+        assert_eq!(binary[0], 0x5678);
 
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "SRL".to_string(), Some("$g8".to_string()), Some("$g9".to_string()), Some("$ua".to_string()), None, None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary, 0x69AB);
+        assert_eq!(binary[0], 0x69AB);
 
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "SRA".to_string(), Some("$sp".to_string()), Some("$fp".to_string()), Some("$ra".to_string()), None, None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary, 0x7CDE);
+        assert_eq!(binary[0], 0x7CDE);
 
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "NAND".to_string(), Some("$pc".to_string()), Some("$g0".to_string()), Some("$g1".to_string()), None, None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary, 0x8F12);
+        assert_eq!(binary[0], 0x8F12);
 
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "OR".to_string(), Some("$g0".to_string()), Some("$g1".to_string()), Some("$g2".to_string()), None, None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary, 0x9123);
+        assert_eq!(binary[0], 0x9123);
 
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "LOAD".to_string(), Some("$g0".to_string()), Some("$g1".to_string()), Some("$g2".to_string()), None, None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary, 0xA123);
+        assert_eq!(binary[0], 0xA123);
 
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "STORE".to_string(), Some("$g0".to_string()), Some("$g1".to_string()), Some("$g2".to_string()), None, None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary, 0xB123);
+        assert_eq!(binary[0], 0xB123);
     }
 
 
@@ -159,11 +173,11 @@ mod tests {
     fn test_rri_tokens() {
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "ADDI".to_string(), Some("$g8".to_string()), Some("$g9".to_string()), None, Some(10), None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary, 0x39AA);
+        assert_eq!(binary[0], 0x39AA);
 
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "SUBI".to_string(), Some("$g8".to_string()), Some("$g9".to_string()), None, Some(5), None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary, 0x49A5);
+        assert_eq!(binary[0], 0x49A5);
     }
 
 
@@ -171,11 +185,11 @@ mod tests {
     fn test_rii_format() {
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "MOVUI".to_string(), Some("$g5".to_string()), None, None, Some(0x75), None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary, 0xC675);
+        assert_eq!(binary[0], 0xC675);
 
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "MOVLI".to_string(), Some("$g5".to_string()), None, None, Some(0xFF), None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary, 0xD6FF);
+        assert_eq!(binary[0], 0xD6FF);
     }
 
 
@@ -183,39 +197,39 @@ mod tests {
     fn test_orr_format() {
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "ADDC".to_string(), Some("$g4".to_string()), None, None, None, None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary, 0xF050);
+        assert_eq!(binary[0], 0xF050);
 
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "SUBC".to_string(), Some("$g4".to_string()), None, None, None, None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary, 0xF150);
+        assert_eq!(binary[0], 0xF150);
 
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "JUMP".to_string(), Some("$g1".to_string()), Some("$g2".to_string()), None, None, None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary, 0xF223);
+        assert_eq!(binary[0], 0xF223);
 
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "JAL".to_string(), Some("$g2".to_string()), Some("$g3".to_string()), None, None, None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary, 0xF334);
+        assert_eq!(binary[0], 0xF334);
 
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "CMP".to_string(), Some("$g3".to_string()), Some("$g4".to_string()), None, None, None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary, 0xF445);
+        assert_eq!(binary[0], 0xF445);
 
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "BEQ".to_string(), Some("$g3".to_string()), Some("$g4".to_string()), None, None, None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary, 0xF545);
+        assert_eq!(binary[0], 0xF545);
 
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "BNE".to_string(), Some("$g3".to_string()), Some("$g4".to_string()), None, None, None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary, 0xF645);
+        assert_eq!(binary[0], 0xF645);
 
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "BLT".to_string(), Some("$g3".to_string()), Some("$g4".to_string()), None, None, None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary, 0xF745);
+        assert_eq!(binary[0], 0xF745);
 
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "BGT".to_string(), Some("$g3".to_string()), Some("$g4".to_string()), None, None, None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary, 0xF845);
+        assert_eq!(binary[0], 0xF845);
     }
 
 
@@ -223,14 +237,28 @@ mod tests {
     fn test_ori_format() {
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "IN".to_string(), Some("$g3".to_string()), None, None, Some(0), None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary, 0xF940);
+        assert_eq!(binary[0], 0xF940);
 
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "OUT".to_string(), Some("$g3".to_string()), None, None, Some(1), None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary, 0xFA41);
+        assert_eq!(binary[0], 0xFA41);
 
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "syscall".to_string(), Some("$g3".to_string()), None, None, Some(5), None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary, 0xFC45);
+        assert_eq!(binary[0], 0xFC45);
+    }
+
+
+    #[test]
+    fn test_data_instr() {
+        let bytes:Vec<u16> = vec![0x0100, 0x01A0, 0x0200, 0x1000, 0x0000];
+        let token = FileTokens::DataTokens(DataTokens::new(None, "section".to_string(), bytes));
+        let binary = get_binary_from_tokens(token).unwrap();
+
+        assert_eq!(binary[0], 0x0100);
+        assert_eq!(binary[1], 0x01A0);
+        assert_eq!(binary[2], 0x0200);
+        assert_eq!(binary[3], 0x1000);
+        assert_eq!(binary[4], 0x0000);
     }
 }
