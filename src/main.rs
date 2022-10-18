@@ -9,6 +9,7 @@ mod token_generator;
 mod label_table;
 mod pseudo_substitution;
 mod token_types;
+mod generate_code;
 
 
 /// Takes a filename and returns a `Vec<FileTokens>` representing the tokens of all the lines of assembly in the file
@@ -73,6 +74,7 @@ fn main() -> Result<(), errors::CmdArgsError> {
     let tokens = pseudo_substitution::substitute_pseudo_instrs(tokens);
     let label_table = label_table::generate_label_table(&tokens);
     let tokens = pseudo_substitution::substitute_labels(tokens, &label_table).unwrap();
+    generate_code::generate_binary(&cmd_args[2], &tokens).unwrap();
 
     let mut sorted_vec:Vec<_> = label_table.iter().collect();
     sorted_vec.sort_by(|a, b| a.1.cmp(b.1));

@@ -71,9 +71,9 @@ pub fn substitute_labels(tokens:Vec<FileTokens>, label_table:&HashMap<String, i6
                                 Some(addr) => {
                                     let address;
                                     if prefix == 'u' {
-                                        address = *addr as u64 & 0x0000_FFFF_0000_0000;
+                                        address = (*addr as u64 & 0x00FF_0000) >> 16;
                                     } else {
-                                        address = *addr as u64 & 0x0000_FFFF;
+                                        address = *addr as u64 & 0x0000_00FF;
                                     }
 
                                     address
@@ -91,9 +91,9 @@ pub fn substitute_labels(tokens:Vec<FileTokens>, label_table:&HashMap<String, i6
                                 Some(addr) => {
                                     let address;
                                     if prefix == 'u' {
-                                        address = *addr as u64 & 0xFFFF_0000;
+                                        address = (*addr as u64 & 0xFF00_0000) >> 24;
                                     } else {
-                                        address = *addr as u64 & 0xFFFF_0000_0000_0000;
+                                        address = (*addr as u64 & 0x0000_FF00) >> 8;
                                     }
 
                                     address
@@ -137,6 +137,7 @@ mod tests {
 
     fn assert_instr_token(token:InstrTokens, operand:String, operand_a:Option<String>, 
         operand_b:Option<String>, operand_c:Option<String>, immediate:Option<u64>, op_label:Option<String>) {
+            println!("Token: {:?}", token);
             assert_eq!(token.opcode, operand);
             assert_eq!(token.operand_a, operand_a);
             assert_eq!(token.operand_b, operand_b);
@@ -147,7 +148,7 @@ mod tests {
 
 
     #[test]
-    fn check_load_substitution() {
+    fn test_load_substitution() {
         let tokens = process_file_into_tokens("test_files/test_expand_pseudoinstrs.asm");
         let subbed_tokens = substitute_pseudo_instrs(tokens);
 
@@ -174,7 +175,7 @@ mod tests {
 
 
     #[test]
-    fn check_store_substitution() {
+    fn test_store_substitution() {
         let tokens = process_file_into_tokens("test_files/test_expand_pseudoinstrs.asm");
         let subbed_tokens = substitute_pseudo_instrs(tokens);
 
@@ -196,7 +197,7 @@ mod tests {
 
 
     #[test]
-    fn check_beq_substitution() {
+    fn test_beq_substitution() {
         let tokens = process_file_into_tokens("test_files/test_expand_pseudoinstrs.asm");
         let subbed_tokens = substitute_pseudo_instrs(tokens);
 
@@ -218,7 +219,7 @@ mod tests {
 
 
     #[test]
-    fn check_bgt_substitution() {
+    fn test_bgt_substitution() {
         let tokens = process_file_into_tokens("test_files/test_expand_pseudoinstrs.asm");
         let subbed_tokens = substitute_pseudo_instrs(tokens);
 
@@ -259,7 +260,7 @@ mod tests {
 
         assert_instr_token(
             tokens[2].try_get_instr_tokens().unwrap(), "MOVLI".to_string(), 
-            Option::from("$ua".to_owned()), None, None, Option::from(0), None
+            Option::from("$ua".to_owned()), None, None, Option::from(16), None
         );
 
         assert_instr_token(
