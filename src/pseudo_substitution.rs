@@ -4,6 +4,9 @@ use std::collections::HashMap;
 
 
 
+/// Locates any instructions with label operands and makes the neccessary substitutions as per the 
+/// `substitute_labels` function. If any single-operand branch instructions are found, then the 
+/// 1st operand is swapped to be the 2nd, and the 1st is turned into `None`.
 pub fn substitute_pseudo_instrs(tokens: Vec<FileTokens>) -> Vec<FileTokens> {
     let mut new_tokens:Vec<FileTokens> = Vec::new();
     for token in &tokens {
@@ -27,7 +30,16 @@ pub fn substitute_pseudo_instrs(tokens: Vec<FileTokens>) -> Vec<FileTokens> {
                             new_tokens.push(token.clone());
                         }
                     },
-                    None => new_tokens.push(FileTokens::InstrTokens(t.clone()))
+                    None => {
+                        if t.opcode == "JUMP" || t.opcode == "BEQ" || t.opcode == "BNE" || t.opcode == "BLT" || t.opcode == "BGT" || t.opcode == "JAL" {
+                            match &t.operand_b {
+                                Some(_) => new_tokens.push(token.clone()),
+                                None => new_tokens.push(FileTokens::InstrTokens(InstrTokens::new(t.label.clone(), t.opcode.clone(), None, t.operand_a.clone(), None, None, None))),
+                            }
+                        } else {
+                            new_tokens.push(FileTokens::InstrTokens(t.clone()));
+                        }
+                    }
                 }
             },
 
@@ -292,6 +304,46 @@ mod tests {
         assert_instr_token(
             tokens[16].try_get_instr_tokens().unwrap(), "BGT".to_string(), 
             Option::from("$g8".to_owned()), Option::from("$g9".to_owned()), None, None, None
+        );
+    }
+
+
+    #[test]
+    fn test_single_operand_branch_substitution() {
+        let tokens = process_file_into_tokens("test_files/test_single_operand_branch_sub.asm");
+        let tokens = substitute_pseudo_instrs(tokens);
+
+        let label_table = generate_label_table(&tokens);
+        let tokens = substitute_labels(tokens, &label_table).unwrap();
+
+        assert_instr_token(
+            tokens[0].try_get_instr_tokens().unwrap(), "JUMP".to_string(), 
+            None, Option::from("$ra".to_owned()), None, None, None
+        );
+
+        assert_instr_token(
+            tokens[1].try_get_instr_tokens().unwrap(), "BNE".to_string(), 
+            None, Option::from("$sp".to_owned()), None, None, None
+        );
+
+        assert_instr_token(
+            tokens[2].try_get_instr_tokens().unwrap(), "BEQ".to_string(), 
+            None, Option::from("$fp".to_owned()), None, None, None
+        );
+
+        assert_instr_token(
+            tokens[3].try_get_instr_tokens().unwrap(), "BGT".to_string(), 
+            None, Option::from("$pc".to_owned()), None, None, None
+        );
+
+        assert_instr_token(
+            tokens[4].try_get_instr_tokens().unwrap(), "BLT".to_string(), 
+            None, Option::from("$ra".to_owned()), None, None, None
+        );
+
+        assert_instr_token(
+            tokens[5].try_get_instr_tokens().unwrap(), "JAL".to_string(), 
+            None, Option::from("$ra".to_owned()), None, None, None
         );
     }
 }

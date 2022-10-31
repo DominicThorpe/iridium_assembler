@@ -489,15 +489,28 @@ fn validate_operands(line:&str, opcode:&str) -> Result<(), AsmValidationError> {
         },
 
         "JUMP" | "JAL" | "BEQ" | "BNE" | "BLT" | "BGT" => {
-            if operands.len() != 2 && operands.len() != 3 {
-                return Err(AsmValidationError(format!("Incorrect number of operands on line {}", line)));
-            }
+            match operands.len() {
+                1 => {
+                    validate_register(&operands[0])?;
+                    if operands[0] != "$sp" && operands[0] != "$fp" && operands[0] != "$ra" && operands[0] != "$pc" {
+                        return Err(AsmValidationError(format!("Incorrect number of operands on line {}", line)));
+                    }
+                },
 
-            validate_register(&operands[0])?;
-            validate_register(&operands[1])?;
+                2 => {
+                    validate_register(&operands[0])?;
+                    validate_register(&operands[1])?;
+                },
 
-            if operands.len() == 3 {
-                validate_label_operand(line, &operands[2])?;
+                3 => {
+                    validate_register(&operands[0])?;
+                    validate_register(&operands[1])?;
+                    validate_label_operand(line, &operands[2])?;
+                },
+
+                _ => {
+                    return Err(AsmValidationError(format!("Incorrect number of operands on line {}", line)));
+                }
             }
         }
 
@@ -743,6 +756,30 @@ mod tests {
         validate_asm_line("BGT $g0, $g1", false).unwrap();
         validate_asm_line("IN $g0, $g1", false).unwrap();
         validate_asm_line("OUT $g0, $g1", false).unwrap();
+    }
+
+
+    #[test]
+    fn test_orr_format_instrs_one_register() {
+        validate_asm_line("JUMP $sp", false).unwrap();
+        validate_asm_line("JAL  $sp", false).unwrap();
+        validate_asm_line("BEQ  $ra", false).unwrap();
+        validate_asm_line("BNE  $pc", false).unwrap();
+        validate_asm_line("BLT  $ra", false).unwrap();
+        validate_asm_line("BGT  $ra", false).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_orr_format_instrs_one_register_16_bits() {
+        validate_asm_line("JUMP $g0", false).unwrap();
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn test_orr_format_instrs_one_register_zero() {
+        validate_asm_line("JUMP $zero", false).unwrap();
     }
 
 
