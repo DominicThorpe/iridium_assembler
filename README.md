@@ -61,8 +61,8 @@ The available instructions are:
 | STORE    | 1011       | RRR  | RAM[$ua + Rs + Rt] = Rd                | STORE $g0, $g1, $g2 |
 | MOVUI    | 1100       | RII  | Set upper 8 bits of Rd to Imm          | MOVUI $g0, 100      |
 | MOVLI    | 1101       | RII  | Set lower 8 bits of Rd to Imm          | MOVLI $g0, 100      |
-| ADDC     | 1111xx0000 | ORR  | Rd = Rd + carry flag                   | ADDC $g0            |
-| SUBC     | 1011xx0001 | ORR  | Rd = Rd - carry flag                   | SUBC $g0            |
+| ADDC     | 1111xx0000 | ORR  | Rd = Rs + carry flag                   | ADDC $g0, $g1       |
+| SUBC     | 1011xx0001 | ORR  | Rd = Rs - carry flag                   | SUBC $g0, $g1       |
 | JUMP     | 1111xx0010 | ORR  | $pc = [Rd] [Rs]                        | JUMP $g0, $g1       |
 | JAL      | 1111xx0011 | ORR  | $ra = $pc, $pc = [Rd] [Rs]             | JAL $g0, $g1        |
 | CMP      | 1111xx0100 | ORR  | Set flags for Rd - Rs                  | CMP $g0, $g1        |
@@ -203,28 +203,27 @@ The program below calculates the Fibonnaci sequence up to 30,000 and stores the 
 
 ```
 init:
-    ADD $g9, $zero, $zero
-    ADDI $g0, $zero, 1
-    ADDI $g1, $zero, 1
-    LOAD $g5, $g8, $g9, @target
+    ADD $g9, $zero, $zero           ; initialise array offset to point to first element
+    ADDI $g0, $zero, 1              ; 1st element of sequence = 1  
+    ADDI $g1, $zero, 1              ; 2nd element of sequence = 2
+    LOAD $g5, $g8, $g9, @target     ; load number to stop at
 
 loop:
-    ADD $g3, $g0, $g1
+    ADD $g2, $g0, $g1               ; get next element in sequence
     ADD $g0, $zero, $g1
-    ADD $g1, $zero, $g2
-    ADD $g2, $zero, $g1
+    ADD $g1, $zero, $g2    
 
-    STORE $g0, $g8, $g9, @results
-    ADDI $g9, $g9, 1
+    STORE $g0, $g8, $g9, @results   ; store element in array
+    ADDI $g9, $g9, 1                ; increment element offset
     
-    CMP $g1, $g5
-    BGT $g8, $g9, @end
-    JUMP $g8, $g9, @loop
+    CMP $g1, $g5                    ; jump to end if last element > target, otherwise loop again
+    BGT $g8, $g7, @end
+    JUMP $g8, $g7, @loop
 
-end: HALT
+end: HALT                           ; stop execution
 
 
 data:
     target:  .int 30000
-    results: .section 128 []
+    results: .section 32 []
 ```
