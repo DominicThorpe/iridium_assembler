@@ -61,20 +61,21 @@ The available instructions are:
 | STORE    | 1011       | RRR  | RAM[$ua + Rs + Rt] = Rd                | STORE $g0, $g1, $g2 |
 | MOVUI    | 1100       | RII  | Set upper 8 bits of Rd to Imm          | MOVUI $g0, 100      |
 | MOVLI    | 1101       | RII  | Set lower 8 bits of Rd to Imm          | MOVLI $g0, 100      |
-| ADDC     | 1111xx0000 | ORR  | Rd = Rs + carry flag                   | ADDC $g0, $g1       |
-| SUBC     | 1011xx0001 | ORR  | Rd = Rs - carry flag                   | SUBC $g0, $g1       |
-| JUMP     | 1111xx0010 | ORR  | $pc = [Rd] [Rs]                        | JUMP $g0, $g1       |
-| JAL      | 1111xx0011 | ORR  | $ra = $pc, $pc = [Rd] [Rs]             | JAL $g0, $g1        |
-| CMP      | 1111xx0100 | ORR  | Set flags for Rd - Rs                  | CMP $g0, $g1        |
-| BEQ      | 1111xx0101 | ORR  | $pc = [Rd] [Rs] if 0 flag set          | BEQ $g0, $g1        |
-| BNE      | 1111xx0110 | ORR  | $pc = [Rd] [Rs] if 0 not flag set      | BNE $g0, $g1        |
-| BLT      | 1111xx0111 | ORR  | $pc = [Rd] [Rs] if no flags set        | BLT $g0, $g1        |
-| BGT      | 1111xx1000 | ORR  | $pc = [Rd] [Rs] if negative flag set   | BGT $g0, $g1        |
-| IN       | 1111xx1001 | ORI  | Rd = input from I/O port given by Imm  | IN $g0, 2           |
-| OUT      | 1111xx1010 | ORI  | Output Rd to I/O port given by Imm     | OUT $g0, 2          |
-| syscall  | 1111xx1100 | ORI  | OS interrupt given by Imm with arg $Rd | syscall $g0, 5      |
+| ADDC     | 1111 0000  | ORR  | Rd = Rs + carry flag                   | ADDC $g0, $g1       |
+| SUBC     | 1011 0001  | ORR  | Rd = Rs - carry flag                   | SUBC $g0, $g1       |
+| JUMP     | 1111 0010  | ORR  | $pc = [Rd] [Rs]                        | JUMP $g0, $g1       |
+| JAL      | 1111 0011  | ORR  | $ra = $pc, $pc = [Rd] [Rs]             | JAL $g0, $g1        |
+| CMP      | 1111 0100  | ORR  | Set flags for Rd - Rs                  | CMP $g0, $g1        |
+| BEQ      | 1111 0101  | ORR  | $pc = [Rd] [Rs] if 0 flag set          | BEQ $g0, $g1        |
+| BNE      | 1111 0110  | ORR  | $pc = [Rd] [Rs] if 0 not flag set      | BNE $g0, $g1        |
+| BLT      | 1111 0111  | ORR  | $pc = [Rd] [Rs] if no flags set        | BLT $g0, $g1        |
+| BGT      | 1111 1000  | ORR  | $pc = [Rd] [Rs] if negative flag set   | BGT $g0, $g1        |
+| IN       | 1111 1001  | ORI  | Rd = input from I/O port given by Imm  | IN $g0, 2           |
+| OUT      | 1111 1010  | ORI  | Output Rd to I/O port given by Imm     | OUT $g0, 2          |
+| syscall  | 1111 1100  | ORI  | ISP given by Imm with args in $g8/9    | syscall 5           |
 | HALT     | 16 1s      | N/A  | Halts execution of process             | HALT                |
 
+Note that the branching instructions (JUMP, JAL, BEQ, BNE, BGT, BLT) can all take a single 32-bit register as an operand as well as 2 16-bit registers. So `JUMP $ra` is a valid instruction, but `JUMP $g5` is not. Furthermore, *\$ua* is not used when the 2nd operand to LOAD and STORE is 32-bits, so in the instruction `LOAD $sp $zero`, the register *$ua* is never changed.
 
 The format of the instructions when writing them is to write the label (covered later), then the instruction mnemonic, which must be in all capitals with the exception of the *syscall* instruction, then any registers, then any immediates, then any label operands. For example, the following are valid instructions:
 
