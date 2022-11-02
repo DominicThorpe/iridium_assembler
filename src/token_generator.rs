@@ -153,7 +153,15 @@ pub fn generate_instr_tokens(line:&str, prev_label:Option<String>) -> InstrToken
 
     match operands.len() {
         0 => InstrTokens::new(label, opcode.to_owned(), None, None, None, None, None),
-        1 => InstrTokens::new(label, opcode.to_owned(), Some(operands[0].clone()), None, None, None, None),
+        1 => {
+            if opcode == "syscall" {
+                return InstrTokens::new(label, opcode.to_owned(), None, None, None, 
+                                                Some(get_int_immediate_from_string(&operands[0]).try_into().unwrap()), None)
+            }
+            
+            InstrTokens::new(label, opcode.to_owned(), Some(operands[0].clone()), None, None, None, None)
+        },
+
         2 => {
             let tokens:InstrTokens;
             if operands[1].starts_with("$") {
@@ -224,6 +232,22 @@ mod tests {
 
         let tokens_binary = generate_instr_tokens("init: ADDI $g0, $zero, 0x0004", None);
         assert_eq!(*tokens_binary.immediate.as_ref().unwrap(), 4);
+    }
+
+
+    #[test]
+    fn test_syscall_generation_all_bases() {
+        let tokens_decimal = generate_instr_tokens("syscall 20", None);
+        assert_eq!(*tokens_decimal.immediate.as_ref().unwrap(), 20);
+        assert_eq!(tokens_decimal.operand_a, None);
+
+        let tokens_hex = generate_instr_tokens("syscall 0x1F", None);
+        assert_eq!(*tokens_hex.immediate.as_ref().unwrap(), 31);
+        assert_eq!(tokens_hex.operand_a, None);
+
+        let tokens_binary = generate_instr_tokens("syscall 0b11001", None);
+        assert_eq!(*tokens_binary.immediate.as_ref().unwrap(), 25);
+        assert_eq!(tokens_binary.operand_a, None);
     }
 
 

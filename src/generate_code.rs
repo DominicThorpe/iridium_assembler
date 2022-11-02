@@ -30,12 +30,15 @@ pub fn get_binary_from_tokens(tokens:FileTokens) -> Result<Vec<u16>, TokenTypeEr
             let opcode = *opcode_binaries.get(&t.opcode).unwrap();
             binary |= opcode;
 
-            // Insert the opcode and first register into the binary instruction based on if the opcode is 4 or 8 bits
-            let register_a:u16 = *register_binaries.get(&t.operand_a.unwrap_or("$zero".to_owned())).unwrap() as u16;
-            if binary & 0xF000 == 0xF000 {
-                binary |= register_a << 4;
-            } else {
-                binary |= register_a << 8;
+            // Insert the opcode and first register into the binary instruction based on if the opcode is 4 or 8 bits unless it is a 
+            // syscall, in which case skip as there is no register, only immediate
+            if opcode != 0xFC00 {
+                let register_a:u16 = *register_binaries.get(&t.clone().operand_a.unwrap_or("$zero".to_owned())).unwrap() as u16;
+                if binary & 0xF000 == 0xF000 {
+                    binary |= register_a << 4;
+                } else {
+                    binary |= register_a << 8;
+                }
             }
 
             match opcode {
@@ -66,6 +69,7 @@ pub fn get_binary_from_tokens(tokens:FileTokens) -> Result<Vec<u16>, TokenTypeEr
                 },
 
                 0xFC00 => {
+                    println!("{:?}", t);
                     binary |= (t.immediate.unwrap() & 0x00FF) as u16;
                 },
 
