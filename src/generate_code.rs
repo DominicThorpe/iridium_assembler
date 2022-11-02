@@ -61,9 +61,13 @@ pub fn get_binary_from_tokens(tokens:FileTokens) -> Result<Vec<u16>, TokenTypeEr
                     binary |= *register_binaries.get(&t.operand_b.unwrap_or("$zero".to_owned())).unwrap() as u16;
                 },
 
-                0xF900 | 0xFA00 | 0xFC00 => { // ori format
+                0xF900 | 0xFA00 => { // ori format
                     binary |= (t.immediate.unwrap() & 0x000F) as u16;
-                }
+                },
+
+                0xFC00 => {
+                    binary |= (t.immediate.unwrap() & 0x00FF) as u16;
+                },
 
                 _ => { // TODO: replace with an error
                     return Err(TokenTypeError(format!("{} is not a valid opcode", opcode)));
@@ -242,10 +246,14 @@ mod tests {
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "OUT".to_string(), Some("$g3".to_string()), None, None, Some(1), None));
         let binary = get_binary_from_tokens(token).unwrap();
         assert_eq!(binary[0], 0xFA41);
+    }
 
-        let token = FileTokens::InstrTokens(InstrTokens::new(None, "syscall".to_string(), Some("$g3".to_string()), None, None, Some(5), None));
+
+    #[test]
+    fn test_syscall_format() {
+        let token = FileTokens::InstrTokens(InstrTokens::new(None, "syscall".to_string(), None, None, None, Some(19), None));
         let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary[0], 0xFC45);
+        assert_eq!(binary[0], 0xFC13);
     }
 
 

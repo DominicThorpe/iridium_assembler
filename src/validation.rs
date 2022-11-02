@@ -527,13 +527,12 @@ fn validate_operands(line:&str, opcode:&str) -> Result<(), AsmValidationError> {
             }
         }
         
-        "syscall" => { // requires a register and an 8-bit immediate
-            if operands.len() != 2 {
+        "syscall" => { // requires only an 8-bit immediate
+            if operands.len() != 1 {
                 return Err(AsmValidationError(format!("Incorrect number of operands on line {}", line)));
             }
 
-            validate_register(&operands[0])?;
-            validate_int_immediate(&operands[1], 8, false)?;
+            validate_int_immediate(&operands[0], 8, false)?;
         },
 
         "NOP" | "HALT" => { // no operands
@@ -787,6 +786,12 @@ mod tests {
     fn test_ri_format_instrs() {
         validate_asm_line("MOVUI $g0, 200", false).unwrap();
         validate_asm_line("MOVLI $g0, 0b11001010", false).unwrap();
+        validate_asm_line("syscall 254", false).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_syscall_with_register_operand() {
         validate_asm_line("syscall $g0, 254", false).unwrap();
     }
 
