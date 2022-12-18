@@ -258,7 +258,7 @@ mod tests {
 
         assert_instr_token(
             tokens[3].try_get_instr_tokens().unwrap(), "MOVUI".to_string(), 
-            Option::from("$g8".to_owned()), None, None, Option::from(0), None
+            Option::from("$g8".to_owned()), None, None, Option::from(0x10), None
         );
 
         assert_instr_token(
