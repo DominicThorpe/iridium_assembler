@@ -69,7 +69,6 @@ pub fn get_binary_from_tokens(tokens:FileTokens) -> Result<Vec<u16>, TokenTypeEr
                 },
 
                 0xFC00 => {
-                    println!("{:?}", t);
                     binary |= (t.immediate.unwrap() & 0x00FF) as u16;
                 },
 
@@ -90,34 +89,57 @@ pub fn get_binary_from_tokens(tokens:FileTokens) -> Result<Vec<u16>, TokenTypeEr
 
 /// Takes a `Vec<FileTokens>` as input and converts it to binary[0], then writes it to the given file
 pub fn generate_binary(filename:&str, tokens:&Vec<FileTokens>) -> Result<(), Box<dyn Error>> {
-    let mut data_mode = false;
-    let mut output_file = BufWriter::new(OpenOptions::new().create(true).write(true).open(filename.to_owned()).unwrap());
+    let mut section_mode = 'c';
+    let mut output_file = BufWriter::new(
+        OpenOptions::new().create(true).write(true).open(filename.to_owned()).unwrap());
+    let mut text_instrs:Vec<FileTokens> = Vec::new(); // These are for the text section, processed last
+
     for token in tokens {
         let binary_vec = match token {
             FileTokens::InstrTokens(_) => get_binary_from_tokens(token.clone()).unwrap(),
             FileTokens::DataTokens(_) => {
-                if !data_mode {
-                    data_mode = true;
-                    output_file.write("data:".as_bytes())?;
+                // skip if is a text instruction, handled later as a special case
+                if token.try_get_data_tokens()?.category == "text".to_owned() {
+                    text_instrs.push(token.clone());
+                    continue;
+                }
+
+                // switch to data mode if a non-text data instr is found
+                if section_mode == 'c' {
+                    section_mode = 'd';
+                    output_file.write("data:\0".as_bytes())?;
                 }
                 
                 get_binary_from_tokens(token.clone()).unwrap()
             }
         };
 
+        // write instr to file
         for binary in binary_vec {
             output_file.write(&[((binary & 0xFF00) >> 8) as u8])?;
             output_file.write(&[(binary & 0x00FF) as u8])?;
         }
     }
 
+    if !text_instrs.is_empty() {
+        output_file.write("text:\0".as_bytes())?;
+        
+        for token in text_instrs {
+            for binary in get_binary_from_tokens(token.clone()).unwrap() {
+                output_file.write(&[((binary & 0xFF00) >> 8) as u8])?;
+                output_file.write(&[(binary & 0x00FF) as u8])?;
+            }
+        }
+    }
+
+    output_file.flush().unwrap();
     Ok(())
 }
 
 
 #[cfg(test)]
 mod tests {
-    use crate::generate_code::get_binary_from_tokens;
+    use crate::generate_code::*;
     use crate::token_types::*;
 
 
@@ -262,7 +284,7 @@ mod tests {
 
 
     #[test]
-    fn test_data_instr() {
+    fn test_section_data_instrs() {
         let bytes:Vec<u16> = vec![0x0100, 0x01A0, 0x0200, 0x1000, 0x0000];
         let token = FileTokens::DataTokens(DataTokens::new(None, "section".to_string(), bytes));
         let binary = get_binary_from_tokens(token).unwrap();

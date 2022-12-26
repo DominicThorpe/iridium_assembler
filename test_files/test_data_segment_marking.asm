@@ -14,3 +14,4 @@ end: HALT
 data:
     ascii_start: .int 0x0041
     ascii_end:   .int 0x007A
+    

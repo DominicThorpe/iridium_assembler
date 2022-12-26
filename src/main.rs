@@ -2,6 +2,7 @@ use std::env;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::io::BufReader;
+use std::time::Instant;
 
 mod errors;
 mod validation;
@@ -70,11 +71,27 @@ fn main() -> Result<(), errors::CmdArgsError> {
 
     println!("Assembling {} into {}", cmd_args[1], cmd_args[2]);
 
+    let now = Instant::now();
+
+    let since = Instant::now();
     let tokens = process_file_into_tokens(&cmd_args[1]);
+    println!("Tokenizer: {:?}", since.elapsed());
+
+    let since = Instant::now();
     let tokens = pseudo_substitution::substitute_pseudo_instrs(tokens);
+    println!("Pseudo Substitution: {:?}", since.elapsed());
+
+    let since = Instant::now();
     let label_table = label_table::generate_label_table(&tokens);
+    println!("Label table: {:?}", since.elapsed());
+
+    let since = Instant::now();
     let tokens = pseudo_substitution::substitute_labels(tokens, &label_table).unwrap();
+    println!("Label substitution: {:?}", since.elapsed());
+
+    let since = Instant::now();
     generate_code::generate_binary(&cmd_args[2], &tokens).unwrap();
+    println!("Binary Generation: {:?}", since.elapsed());
 
     let mut sorted_vec:Vec<_> = label_table.iter().collect();
     sorted_vec.sort_by(|a, b| a.1.cmp(b.1));
@@ -82,12 +99,11 @@ fn main() -> Result<(), errors::CmdArgsError> {
         println!("{:<16} {:06X}", label, line);
     }
     
-    println!("Len: {}", tokens.len());
-    for token in tokens {
+    for token in &tokens {
         println!("{:?}", token);
     }
 
-    println!("Assembly successful!");
+    println!("Assembly successful! Took {:?} to process {} lines", now.elapsed(), tokens.len());
 
     Ok(())
 }

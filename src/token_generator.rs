@@ -22,8 +22,8 @@ fn convert_string_to_bytes(string:&str, vec_size:usize) -> Vec<u16> {
 }
 
 
-/// Takes some data in the form of a string which can be any data type (e.g. long, text, integer, section...) and converts it
-/// to an array of bytes
+/// Takes some data in the form of a string which can be any data type (e.g. long, text, integer,
+/// section...) and converts it to an array of bytes
 fn get_bytes_array_from_line(category:&str, data:&str) -> Vec<u16> {
     let data = remove_label(data);
     let mut bytes:Vec<u16> = Vec::new();
