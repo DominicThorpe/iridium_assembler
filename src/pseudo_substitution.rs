@@ -43,6 +43,10 @@ pub fn substitute_pseudo_instrs(tokens: Vec<FileTokens>) -> Vec<FileTokens> {
 
             FileTokens::DataTokens(_) => {
                 new_tokens.push(token.clone());
+            },
+
+            FileTokens::TextTokens(_) => {
+                new_tokens.push(token.clone());
             }
         }
     }
@@ -59,6 +63,10 @@ pub fn substitute_labels(tokens:Vec<FileTokens>, label_table:&HashMap<String, i6
         match token {
             FileTokens::DataTokens(t) => {
                 new_tokens.push(FileTokens::DataTokens(t.clone()));
+            },
+
+            FileTokens::TextTokens(t) => {
+                new_tokens.push(FileTokens::TextTokens(t.clone()));
             },
 
             FileTokens::InstrTokens(mut t) => {
@@ -243,7 +251,7 @@ mod tests {
     fn test_non_existant_label() {
         let tokens = process_file_into_tokens("test_files/test_detect_bad_label.asm");
         let tokens = substitute_pseudo_instrs(tokens);
-        let label_table = generate_label_table(&tokens);
+        let label_table = generate_label_table(&tokens).unwrap();
         let _tokens = substitute_labels(tokens, &label_table).unwrap();
     }
 
@@ -253,7 +261,7 @@ mod tests {
         let tokens = process_file_into_tokens("test_files/test_sub_label_addrs.asm");
         let tokens = substitute_pseudo_instrs(tokens);
 
-        let label_table = generate_label_table(&tokens);
+        let label_table = generate_label_table(&tokens).unwrap();
         let tokens = substitute_labels(tokens, &label_table).unwrap();
 
         assert_instr_token(
@@ -294,7 +302,7 @@ mod tests {
         let tokens = process_file_into_tokens("test_files/test_single_operand_branch_sub.asm");
         let tokens = substitute_pseudo_instrs(tokens);
 
-        let label_table = generate_label_table(&tokens);
+        let label_table = generate_label_table(&tokens).unwrap();
         let tokens = substitute_labels(tokens, &label_table).unwrap();
 
         assert_instr_token(

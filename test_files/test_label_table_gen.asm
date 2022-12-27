@@ -22,5 +22,8 @@ data:
     float:
         .float -3104.76171875
     eszet: .char 'ß'
-    text_data: .text 20 "Some characters!"
     list: .section 10 [1, 1, 2, 3, 5, 8, 13, 21, 34, 55]
+
+text:
+    text_data: .text 20 "Some characters!"
+    

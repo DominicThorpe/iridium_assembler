@@ -16,7 +16,7 @@ mod generate_code;
 /// Takes a filename and returns a `Vec<FileTokens>` representing the tokens of all the lines of assembly in the file
 /// which can be either `DataTokens` or `InstrTokens`.
 pub fn process_file_into_tokens(input_file:&str) -> Vec<token_types::FileTokens> {
-    let mut data_mode = false;
+    let mut mode = 'c';
     let input_file = BufReader::new(OpenOptions::new().read(true).open(input_file.to_owned()).unwrap());
     let mut tokens:Vec<token_types::FileTokens> = Vec::new();
     let mut next_label:Option<String> = None;
@@ -26,26 +26,44 @@ pub fn process_file_into_tokens(input_file:&str) -> Vec<token_types::FileTokens>
         if line.is_empty() { // skip if line is blank
             continue;
         } else if line == "data:" {
-            data_mode = true;
+            mode = 'd';
+            continue;
+        } else if line == "text:" {
+            mode = 't';
             continue;
         }
 
-        validation::validate_asm_line(&line, data_mode).unwrap();
+        validation::validate_asm_line(&line, mode).unwrap();
 
-        if !data_mode {
-            if line.ends_with(":") {
-                next_label = Some(line[..line.len() - 1].to_owned());
-            } else {
-                tokens.push(token_types::FileTokens::InstrTokens(token_generator::generate_instr_tokens(line, next_label.clone())));
-                next_label = None;
-            }
-        } else {
-            if line.ends_with(":") {
-                next_label = Some(line[..line.len() - 1].to_owned());
-            } else {
-                tokens.push(token_types::FileTokens::DataTokens(token_generator::generate_data_tokens(line, next_label.clone())));
-                next_label = None;
-            }
+        match mode {
+            'c' => {
+                if line.ends_with(":") {
+                    next_label = Some(line[..line.len() - 1].to_owned());
+                } else {
+                    tokens.push(token_types::FileTokens::InstrTokens(token_generator::generate_instr_tokens(line, next_label.clone())));
+                    next_label = None;
+                }
+            },
+
+            'd' => {
+                if line.ends_with(":") {
+                    next_label = Some(line[..line.len() - 1].to_owned());
+                } else {
+                    tokens.push(token_types::FileTokens::DataTokens(token_generator::generate_data_tokens(line, next_label.clone(), mode)));
+                    next_label = None;
+                }
+            },
+
+            't' => {
+                if line.ends_with(":") {
+                    next_label = Some(line[..line.len() - 1].to_owned());
+                } else {
+                    tokens.push(token_types::FileTokens::TextTokens(token_generator::generate_text_tokens(line, next_label.clone(), mode)));
+                    next_label = None;
+                }
+            },
+
+            _ => panic!("Invalid section mode '{}'", mode)
         }
     }
 
@@ -82,8 +100,9 @@ fn main() -> Result<(), errors::CmdArgsError> {
     println!("Pseudo Substitution: {:?}", since.elapsed());
 
     let since = Instant::now();
-    let label_table = label_table::generate_label_table(&tokens);
+    let label_table = label_table::generate_label_table(&tokens).unwrap();
     println!("Label table: {:?}", since.elapsed());
+    println!("{:#?}", label_table);
 
     let since = Instant::now();
     let tokens = pseudo_substitution::substitute_labels(tokens, &label_table).unwrap();

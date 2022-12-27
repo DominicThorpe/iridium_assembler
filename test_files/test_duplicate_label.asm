@@ -1,6 +1,6 @@
 start:
-    MOVLI $g0, @start_num
-    MOVLI $g1, @end_num
+    MOVLI $g0, @start
+    MOVLI $g1, @end
 
 loop_start:
     ADDI $g0, $g0, 1
@@ -12,8 +12,8 @@ end: HALT
 
 
 data:
-    start_num: .int 100
-    end_num: .int 300
+    start: .int 100
+    end: .int 300
     big_num: .long 7000000
     name: .text 11 "John Smith"
     pi: .half 3.141

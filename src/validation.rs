@@ -4,18 +4,18 @@ use crate::errors::AsmValidationError;
 
 /// Takes a line of assembly code, for example `ADD $g0, $zero, $g1`, and returns an `Err` if it is not 
 /// valid Iridium assembly.
-pub fn validate_asm_line(line:&str, data_mode:bool) -> Result<(), AsmValidationError> {
+pub fn validate_asm_line(line:&str, mode:char) -> Result<(), AsmValidationError> {
     validate_line_label(line)?;
     if line.ends_with(":") {
         return Ok(());
     }
 
     // validate if the line is not just a label
-    if !data_mode {
+    if mode == 'c' { // if in the code section
         let opcode = match validate_opcode(line) {
             Ok(val) => val,
             Err(e) => {
-                match validate_data_type(line) {
+                match validate_data_type(line, mode) {
                     Ok(_) => {
                         return Err(AsmValidationError(format!("{} is for data, but is in the instructions section, which is invalid", line)));
                     },
@@ -31,7 +31,7 @@ pub fn validate_asm_line(line:&str, data_mode:bool) -> Result<(), AsmValidationE
         return Ok(());
     } 
     
-    let data_type = match validate_data_type(line) {
+    let data_type = match validate_data_type(line, mode) {
         Ok(val) => val,
         Err(e) => {
             match validate_opcode(line) {
@@ -64,11 +64,17 @@ pub fn remove_label(line:&str) -> &str {
 
 /// Takes a line of assembly and checks if it is a valid data instruction, such as .text or .float. Returns 
 /// an `AsmValidationErr` if there is no valid data type, and returns the data type if there is.
-pub fn validate_data_type(line:&str) -> Result<&str, AsmValidationError> {
+pub fn validate_data_type(line:&str, mode:char) -> Result<&str, AsmValidationError> {
     let valid_data_types:[&str;7] = [".int", ".long", ".half", ".float", ".section", ".char", ".text"];
     let data_type = remove_label(line).split(" ").collect::<Vec<&str>>()[0];
     if !valid_data_types.contains(&data_type) {
         return Err(AsmValidationError(format!("{} is not a valid data type on line {}", data_type, line)));
+    }
+
+    if mode == 't' && data_type != ".text" {
+        return Err(AsmValidationError(format!("{} is not text, yet is in the text section", line)));
+    } else if mode != 't' && data_type == ".text" {
+        return Err(AsmValidationError(format!("{} is text, yet is not in the text section", line)));
     }
 
     Ok(data_type)
@@ -604,8 +610,8 @@ mod tests {
 
     #[test]
     fn test_label_only_line() {
-        validate_asm_line("my_label1:", false).unwrap();
-        validate_asm_line("my_label1:", true).unwrap();
+        validate_asm_line("my_label1:", 'c').unwrap();
+        validate_asm_line("my_label1:", 'd').unwrap();
     }
 
 
@@ -668,219 +674,219 @@ mod tests {
 
     #[test]
     fn label_only_line() {
-        validate_asm_line("label_line:", false).unwrap();
+        validate_asm_line("label_line:", 'c').unwrap();
     }
 
 
     #[test]
     fn test_no_operand_instrs() {
-        validate_asm_line("NOP", false).unwrap();
-        validate_asm_line("HALT", false).unwrap();
+        validate_asm_line("NOP", 'c').unwrap();
+        validate_asm_line("HALT", 'c').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_invalid_no_operand_instr() {
-        validate_asm_line("NOP $g0", false).unwrap();
+        validate_asm_line("NOP $g0", 'c').unwrap();
     }
 
     #[test]
     #[should_panic]
     fn test_wrong_number_of_operands() {
-        validate_asm_line("ADDC $g0, $g1, $g2", false).unwrap();
+        validate_asm_line("ADDC $g0, $g1, $g2", 'c').unwrap();
     }
 
 
     #[test]
     fn test_rrr_format_instrs() {
-        validate_asm_line("my_label: ADD $g0, $zero, $g1", false).unwrap();
-        validate_asm_line("SUB $g1,$g2,$g3", false).unwrap();
-        validate_asm_line("NAND $g4, $g5, $g6", false).unwrap();
-        validate_asm_line("OR $g4, $g5, $g6", false).unwrap();
-        validate_asm_line("LOAD $g7, $g8, $g9", false).unwrap();
-        validate_asm_line("STORE $ua, $sp, $ra", false).unwrap();
-        validate_asm_line("ADD $fp, $pc, $g0", false).unwrap();
+        validate_asm_line("my_label: ADD $g0, $zero, $g1", 'c').unwrap();
+        validate_asm_line("SUB $g1,$g2,$g3", 'c').unwrap();
+        validate_asm_line("NAND $g4, $g5, $g6", 'c').unwrap();
+        validate_asm_line("OR $g4, $g5, $g6", 'c').unwrap();
+        validate_asm_line("LOAD $g7, $g8, $g9", 'c').unwrap();
+        validate_asm_line("STORE $ua, $sp, $ra", 'c').unwrap();
+        validate_asm_line("ADD $fp, $pc, $g0", 'c').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_rrr_invalid_operand() {
-        validate_asm_line("ADD $g0, $q5, $g1", false).unwrap();
+        validate_asm_line("ADD $g0, $q5, $g1", 'c').unwrap();
     }
 
 
     #[test]
     fn test_rri_format_instrs() {
-        validate_asm_line("ADDI $g0, $zero, 5", false).unwrap();
-        validate_asm_line("SUBI $g0, $g1, 0x000A", false).unwrap();
-        validate_asm_line("SLL $g0, $g1, 0b1101", false).unwrap();
-        validate_asm_line("SRL $g2, $g3, 13", false).unwrap();
-        validate_asm_line("SRA $g3, $g4, 0x0004", false).unwrap();
+        validate_asm_line("ADDI $g0, $zero, 5", 'c').unwrap();
+        validate_asm_line("SUBI $g0, $g1, 0x000A", 'c').unwrap();
+        validate_asm_line("SLL $g0, $g1, 0b1101", 'c').unwrap();
+        validate_asm_line("SRL $g2, $g3, 13", 'c').unwrap();
+        validate_asm_line("SRA $g3, $g4, 0x0004", 'c').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_negative_immediate() {
-        validate_asm_line("ADDI $g0, $g1, -5", false).unwrap();
+        validate_asm_line("ADDI $g0, $g1, -5", 'c').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_too_large_immediate() {
-        validate_asm_line("ADDI $g0, $g1, 0xFFFF", false).unwrap();
+        validate_asm_line("ADDI $g0, $g1, 0xFFFF", 'c').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_malformed_immediate() {
-        validate_asm_line("ADDI $g0, $g1, 1q", false).unwrap();
+        validate_asm_line("ADDI $g0, $g1, 1q", 'c').unwrap();
     }
 
 
     #[test]
     fn test_rro_format_instrs() {
-        validate_asm_line("ADDC $g0, $g1", false).unwrap();
-        validate_asm_line("SUBC $g0, $g1", false).unwrap();
-        validate_asm_line("JUMP $g0, $g1", false).unwrap();
-        validate_asm_line("CMP $g0, $g1", false).unwrap();
-        validate_asm_line("JAL $g0, $g1", false).unwrap();
-        validate_asm_line("BEQ $g0, $g1", false).unwrap();
-        validate_asm_line("BNE $g0, $g1", false).unwrap();
-        validate_asm_line("BLT $g0, $g1", false).unwrap();
-        validate_asm_line("BGT $g0, $g1", false).unwrap();
-        validate_asm_line("IN $g0, $g1", false).unwrap();
-        validate_asm_line("OUT $g0, $g1", false).unwrap();
+        validate_asm_line("ADDC $g0, $g1", 'c').unwrap();
+        validate_asm_line("SUBC $g0, $g1", 'c').unwrap();
+        validate_asm_line("JUMP $g0, $g1", 'c').unwrap();
+        validate_asm_line("CMP $g0, $g1", 'c').unwrap();
+        validate_asm_line("JAL $g0, $g1", 'c').unwrap();
+        validate_asm_line("BEQ $g0, $g1", 'c').unwrap();
+        validate_asm_line("BNE $g0, $g1", 'c').unwrap();
+        validate_asm_line("BLT $g0, $g1", 'c').unwrap();
+        validate_asm_line("BGT $g0, $g1", 'c').unwrap();
+        validate_asm_line("IN $g0, $g1", 'c').unwrap();
+        validate_asm_line("OUT $g0, $g1", 'c').unwrap();
     }
 
 
     #[test]
     fn test_orr_format_instrs_one_register() {
-        validate_asm_line("JUMP $sp", false).unwrap();
-        validate_asm_line("JAL  $sp", false).unwrap();
-        validate_asm_line("BEQ  $ra", false).unwrap();
-        validate_asm_line("BNE  $pc", false).unwrap();
-        validate_asm_line("BLT  $ra", false).unwrap();
-        validate_asm_line("BGT  $ra", false).unwrap();
+        validate_asm_line("JUMP $sp", 'c').unwrap();
+        validate_asm_line("JAL  $sp", 'c').unwrap();
+        validate_asm_line("BEQ  $ra", 'c').unwrap();
+        validate_asm_line("BNE  $pc", 'c').unwrap();
+        validate_asm_line("BLT  $ra", 'c').unwrap();
+        validate_asm_line("BGT  $ra", 'c').unwrap();
     }
 
     #[test]
     #[should_panic]
     fn test_orr_format_instrs_one_register_16_bits() {
-        validate_asm_line("JUMP $g0", false).unwrap();
+        validate_asm_line("JUMP $g0", 'c').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_orr_format_instrs_one_register_zero() {
-        validate_asm_line("JUMP $zero", false).unwrap();
+        validate_asm_line("JUMP $zero", 'c').unwrap();
     }
 
 
     #[test]
     fn test_ri_format_instrs() {
-        validate_asm_line("MOVUI $g0, 200", false).unwrap();
-        validate_asm_line("MOVLI $g0, 0b11001010", false).unwrap();
-        validate_asm_line("syscall 254", false).unwrap();
+        validate_asm_line("MOVUI $g0, 200", 'c').unwrap();
+        validate_asm_line("MOVLI $g0, 0b11001010", 'c').unwrap();
+        validate_asm_line("syscall 254", 'c').unwrap();
     }
 
     #[test]
     #[should_panic]
     fn test_syscall_with_register_operand() {
-        validate_asm_line("syscall $g0, 254", false).unwrap();
+        validate_asm_line("syscall $g0, 254", 'c').unwrap();
     }
 
 
     #[test]
     fn test_int_data() {
-        validate_asm_line("my_label: .int 40", true).unwrap();
-        validate_asm_line("my_label: .int 0xFF", true).unwrap();
-        validate_asm_line("my_label: .int -100", true).unwrap();
-        validate_asm_line("my_label: .int 0b00111010", true).unwrap();
-        validate_asm_line("my_label: .int 0", true).unwrap();
-        validate_asm_line("my_label: .int 32767", true).unwrap();
-        validate_asm_line("my_label: .int -32768", true).unwrap();
+        validate_asm_line("my_label: .int 40", 'd').unwrap();
+        validate_asm_line("my_label: .int 0xFF", 'd').unwrap();
+        validate_asm_line("my_label: .int -100", 'd').unwrap();
+        validate_asm_line("my_label: .int 0b00111010", 'd').unwrap();
+        validate_asm_line("my_label: .int 0", 'd').unwrap();
+        validate_asm_line("my_label: .int 32767", 'd').unwrap();
+        validate_asm_line("my_label: .int -32768", 'd').unwrap();
     }
 
 
     #[test]
     fn test_long_data() {
-        validate_asm_line("my_label: .long 40", true).unwrap();
-        validate_asm_line("my_label: .long 0xFF", true).unwrap();
-        validate_asm_line("my_label: .long -100", true).unwrap();
-        validate_asm_line("my_label: .long 0b00111010", true).unwrap();
-        validate_asm_line("my_label: .long 0", true).unwrap();
-        validate_asm_line("my_label: .long 2147483647", true).unwrap();
-        validate_asm_line("my_label: .long -2147483648", true).unwrap();
+        validate_asm_line("my_label: .long 40", 'd').unwrap();
+        validate_asm_line("my_label: .long 0xFF", 'd').unwrap();
+        validate_asm_line("my_label: .long -100", 'd').unwrap();
+        validate_asm_line("my_label: .long 0b00111010", 'd').unwrap();
+        validate_asm_line("my_label: .long 0", 'd').unwrap();
+        validate_asm_line("my_label: .long 2147483647", 'd').unwrap();
+        validate_asm_line("my_label: .long -2147483648", 'd').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_int_data_too_small() {
-        validate_asm_line("my_label: .int -32769", true).unwrap();
+        validate_asm_line("my_label: .int -32769", 'd').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_int_data_too_large() {
-        validate_asm_line("my_label: .int 32768", true).unwrap();
+        validate_asm_line("my_label: .int 32768", 'd').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_long_data_too_small() {
-        validate_asm_line("my_label: .int -2147483649", true).unwrap();
+        validate_asm_line("my_label: .int -2147483649", 'd').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_long_data_too_large() {
-        validate_asm_line("my_label: .int 2147483648", true).unwrap();
+        validate_asm_line("my_label: .int 2147483648", 'd').unwrap();
     }
 
 
     #[test]
     fn test_floating_point_half_data() {
-        validate_asm_line("my_label:.half 0", true).unwrap();
-        validate_asm_line("my_label: .half 0.001", true).unwrap();
-        validate_asm_line("my_label: .half 5.25", true).unwrap();
-        validate_asm_line("my_label: .half -5.25", true).unwrap();
-        validate_asm_line("my_label: .half -4293918721", true).unwrap();
-        validate_asm_line("my_label: .half 4293918721", true).unwrap();
+        validate_asm_line("my_label:.half 0", 'd').unwrap();
+        validate_asm_line("my_label: .half 0.001", 'd').unwrap();
+        validate_asm_line("my_label: .half 5.25", 'd').unwrap();
+        validate_asm_line("my_label: .half -5.25", 'd').unwrap();
+        validate_asm_line("my_label: .half -4293918721", 'd').unwrap();
+        validate_asm_line("my_label: .half 4293918721", 'd').unwrap();
     }
 
 
     #[test]
     fn test_floating_point_full_data() {
-        validate_asm_line("my_label:.float 0", true).unwrap();
-        validate_asm_line("my_label: .float 0.001", true).unwrap();
-        validate_asm_line("my_label: .float 5.25", true).unwrap();
-        validate_asm_line("my_label: .float -5.25", true).unwrap();
-        validate_asm_line(&format!("my_label: .float {}", -f32::MAX), true).unwrap();
-        validate_asm_line(&format!("my_label: .float {}", f32::MAX), true).unwrap();
+        validate_asm_line("my_label:.float 0", 'd').unwrap();
+        validate_asm_line("my_label: .float 0.001", 'd').unwrap();
+        validate_asm_line("my_label: .float 5.25", 'd').unwrap();
+        validate_asm_line("my_label: .float -5.25", 'd').unwrap();
+        validate_asm_line(&format!("my_label: .float {}", -f32::MAX), 'd').unwrap();
+        validate_asm_line(&format!("my_label: .float {}", f32::MAX), 'd').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_half_float_data_too_small() {
-        validate_asm_line("my_label: .int -4293918722", true).unwrap();
+        validate_asm_line("my_label: .int -4293918722", 'd').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_half_float_data_too_large() {
-        validate_asm_line("my_label: .int 4293918722", true).unwrap();
+        validate_asm_line("my_label: .int 4293918722", 'd').unwrap();
     }
 
 
@@ -888,7 +894,7 @@ mod tests {
     #[should_panic]
     fn test_full_float_data_too_small() {
         let min:f64 = f32::MIN.into();
-        validate_asm_line(&format!("my_label: .float {}", min * 2.0), true).unwrap(); // multiply to take into account underflow
+        validate_asm_line(&format!("my_label: .float {}", min * 2.0), 'd').unwrap(); // multiply to take into account underflow
     }
 
 
@@ -896,169 +902,169 @@ mod tests {
     #[should_panic]
     fn test_full_float_data_too_large() {
         let max:f64 = f32::MAX.into();
-        validate_asm_line(&format!("my_label: .float {}", max * 2.0), true).unwrap(); // multiply to take into account underflow
+        validate_asm_line(&format!("my_label: .float {}", max * 2.0), 'd').unwrap(); // multiply to take into account underflow
     }
 
 
     #[test]
     fn test_character_data() {
-        validate_asm_line("my_label: .char 'a'", true).unwrap();
-        validate_asm_line("my_label: .char 'b'", true).unwrap();
-        validate_asm_line("my_label: .char '.'", true).unwrap();
-        validate_asm_line("my_label: .char ' '", true).unwrap();
-        validate_asm_line("my_label: .char '你'", true).unwrap();
-        validate_asm_line("my_label: .char '\t'", true).unwrap();
-        validate_asm_line("my_label: .char '\n'", true).unwrap();
+        validate_asm_line("my_label: .char 'a'", 'd').unwrap();
+        validate_asm_line("my_label: .char 'b'", 'd').unwrap();
+        validate_asm_line("my_label: .char '.'", 'd').unwrap();
+        validate_asm_line("my_label: .char ' '", 'd').unwrap();
+        validate_asm_line("my_label: .char '你'", 'd').unwrap();
+        validate_asm_line("my_label: .char '\t'", 'd').unwrap();
+        validate_asm_line("my_label: .char '\n'", 'd').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_string_in_char_data() {
-        validate_asm_line("my_label: .char 'hi'", true).unwrap();
+        validate_asm_line("my_label: .char 'hi'", 'd').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_wrong_quotes_char_data() {
-        validate_asm_line("my_label: .char \"h\"", true).unwrap();
+        validate_asm_line("my_label: .char \"h\"", 'd').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_empty_quotes_char_data() {
-        validate_asm_line("my_label: .char ''", true).unwrap();
+        validate_asm_line("my_label: .char ''", 'd').unwrap();
     }
 
 
     #[test]
     fn test_valid_text() {
-        validate_asm_line("my_text: .text 13 \"Hello world!\"", true).unwrap();
-        validate_asm_line("my_text: .text 8 \"你好我很高兴!\"", true).unwrap();
-        validate_asm_line("empty_text: .text 1 \"\"", true).unwrap();
-        validate_asm_line("multiline:.text 50 \"My longer\nparagraph of some\rgood text\"", true).unwrap();
+        validate_asm_line("my_text: .text 13 \"Hello world!\"", 't').unwrap();
+        validate_asm_line("my_text: .text 8 \"你好我很高兴!\"", 't').unwrap();
+        validate_asm_line("empty_text: .text 1 \"\"", 't').unwrap();
+        validate_asm_line("multiline:.text 50 \"My longer\nparagraph of some\rgood text\"", 't').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_too_short_text() {
-        validate_asm_line("my_text: .text 5 \"This is too  long for the array\"", true).unwrap();
+        validate_asm_line("my_text: .text 5 \"This is too  long for the array\"", 'd').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_no_length_text() {
-        validate_asm_line("my_text: .text \"Hello world!\"", true).unwrap();
+        validate_asm_line("my_text: .text \"Hello world!\"", 'd').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_invalid_quotes_text() {
-        validate_asm_line("my_text: .text 10 'hello'", true).unwrap();
+        validate_asm_line("my_text: .text 10 'hello'", 'd').unwrap();
     }
 
 
     #[test]
     fn test_valid_bytes_section() {
-        validate_asm_line("my_label: .section 4 [0xFFFF, 0x1234, 0xAAAA, 0x1212]", true).unwrap();
-        validate_asm_line("empty: .section 0 []", true).unwrap();
-        validate_asm_line("my_label: .section 10 [0xFFFF, 0x1234, 0xAAAA, 0x1212]", true).unwrap();
+        validate_asm_line("my_label: .section 4 [0xFFFF, 0x1234, 0xAAAA, 0x1212]", 'd').unwrap();
+        validate_asm_line("empty: .section 0 []", 'd').unwrap();
+        validate_asm_line("my_label: .section 10 [0xFFFF, 0x1234, 0xAAAA, 0x1212]", 'd').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_too_small_bytes_section() {
-        validate_asm_line("my_label: .section 3 [0xFFFF, 0x1234, 0xAAAA, 0x1212]", true).unwrap();
+        validate_asm_line("my_label: .section 3 [0xFFFF, 0x1234, 0xAAAA, 0x1212]", 'd').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_wrong_brackets_bytes_section() {
-        validate_asm_line("my_label: .section 4 (0xFFFF, 0x1234, 0xAAAA, 0x1212)", true).unwrap();
+        validate_asm_line("my_label: .section 4 (0xFFFF, 0x1234, 0xAAAA, 0x1212)", 'd').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_no_size_bytes_section() {
-        validate_asm_line("my_label: .section [0xFFFF, 0x1234, 0xAAAA, 0x1212]", true).unwrap();
+        validate_asm_line("my_label: .section [0xFFFF, 0x1234, 0xAAAA, 0x1212]", 'd').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_bytes_section_item_too_large() {
-        validate_asm_line("my_label: .section 4 [0xFFFFF, 0x1234, 0xAAAA, 0x1212]", true).unwrap();
+        validate_asm_line("my_label: .section 4 [0xFFFFF, 0x1234, 0xAAAA, 0x1212]", 'd').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_bytes_section_invalid_item() {
-        validate_asm_line("my_label: .section 4 [0xFFFF, 0x1234, 'a', 0x1212]", true).unwrap();
+        validate_asm_line("my_label: .section 4 [0xFFFF, 0x1234, 'a', 0x1212]", 'd').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_instr_in_data_section() {
-        validate_asm_line("my_label: .long 0xFFFFFF", false).unwrap();
+        validate_asm_line("my_label: .long 0xFFFFFF", 'c').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_data_in_instrs_section() {
-        validate_asm_line("my_label: ADD $g0, $g1, $g2", true).unwrap();
+        validate_asm_line("my_label: ADD $g0, $g1, $g2", 'd').unwrap();
     }
 
 
     #[test]
     fn test_opcodes_with_jump_label() {
-        validate_asm_line("JUMP $g0, $g1, @jump_label", false).unwrap();
-        validate_asm_line("JAL $g0, $g1, @jal_label", false).unwrap();
-        validate_asm_line("BEQ $g0, $g1, @beq_label", false).unwrap();
-        validate_asm_line("BNE $g0, $g1, @bne_label", false).unwrap();
-        validate_asm_line("BLT $g0, $g1, @blt_label", false).unwrap();
-        validate_asm_line("BGT $g0, $g1, @bgt_label", false).unwrap();
-        validate_asm_line("LOAD $g0, $g1, $g2, @load_label", false).unwrap();
-        validate_asm_line("STORE $g0, $g1, $g2, @store_label", false).unwrap();
-        validate_asm_line("MOVUI $g0, @movui_label", false).unwrap();
-        validate_asm_line("MOVLI $g0, @movli_label", false).unwrap();
+        validate_asm_line("JUMP $g0, $g1, @jump_label", 'c').unwrap();
+        validate_asm_line("JAL $g0, $g1, @jal_label", 'c').unwrap();
+        validate_asm_line("BEQ $g0, $g1, @beq_label", 'c').unwrap();
+        validate_asm_line("BNE $g0, $g1, @bne_label", 'c').unwrap();
+        validate_asm_line("BLT $g0, $g1, @blt_label", 'c').unwrap();
+        validate_asm_line("BGT $g0, $g1, @bgt_label", 'c').unwrap();
+        validate_asm_line("LOAD $g0, $g1, $g2, @load_label", 'c').unwrap();
+        validate_asm_line("STORE $g0, $g1, $g2, @store_label", 'c').unwrap();
+        validate_asm_line("MOVUI $g0, @movui_label", 'c').unwrap();
+        validate_asm_line("MOVLI $g0, @movli_label", 'c').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_movli_with_invalid_label() {
-        validate_asm_line("ADD $g0, $g1, $g2, jump_label", false).unwrap();
+        validate_asm_line("ADD $g0, $g1, $g2, jump_label", 'c').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_non_jump_with_jump_label() {
-        validate_asm_line("ADD $g0, $g1, $g2, @jump_label", false).unwrap();
+        validate_asm_line("ADD $g0, $g1, $g2, @jump_label", 'c').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_jump_with_invalid_jump_label() {
-        validate_asm_line("JUMP $g0, $g1, jump_label", false).unwrap();
+        validate_asm_line("JUMP $g0, $g1, jump_label", 'c').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_jump_with_invalid_jump_label_char() {
-        validate_asm_line("JUMP $g0, $g1, @jump~label", false).unwrap();
+        validate_asm_line("JUMP $g0, $g1, @jump~label", 'c').unwrap();
     }
 }

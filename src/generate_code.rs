@@ -82,6 +82,10 @@ pub fn get_binary_from_tokens(tokens:FileTokens) -> Result<Vec<u16>, TokenTypeEr
 
         FileTokens::DataTokens(t) => {
             return Ok(t.bytes);
+        },
+
+        FileTokens::TextTokens(t) => {
+            return Ok(t.bytes);
         }
     }
 }
@@ -97,13 +101,12 @@ pub fn generate_binary(filename:&str, tokens:&Vec<FileTokens>) -> Result<(), Box
     for token in tokens {
         let binary_vec = match token {
             FileTokens::InstrTokens(_) => get_binary_from_tokens(token.clone()).unwrap(),
-            FileTokens::DataTokens(_) => {
-                // skip if is a text instruction, handled later as a special case
-                if token.try_get_data_tokens()?.category == "text".to_owned() {
-                    text_instrs.push(token.clone());
-                    continue;
-                }
+            FileTokens::TextTokens(_) => {
+                text_instrs.push(token.clone());
+                continue;
+            },
 
+            FileTokens::DataTokens(_) => {
                 // switch to data mode if a non-text data instr is found
                 if section_mode == 'c' {
                     section_mode = 'd';
@@ -116,8 +119,8 @@ pub fn generate_binary(filename:&str, tokens:&Vec<FileTokens>) -> Result<(), Box
 
         // write instr to file
         for binary in binary_vec {
-            output_file.write(&[((binary & 0xFF00) >> 8) as u8])?;
             output_file.write(&[(binary & 0x00FF) as u8])?;
+            output_file.write(&[((binary & 0xFF00) >> 8) as u8])?;
         }
     }
 
@@ -126,8 +129,8 @@ pub fn generate_binary(filename:&str, tokens:&Vec<FileTokens>) -> Result<(), Box
         
         for token in text_instrs {
             for binary in get_binary_from_tokens(token.clone()).unwrap() {
-                output_file.write(&[((binary & 0xFF00) >> 8) as u8])?;
                 output_file.write(&[(binary & 0x00FF) as u8])?;
+                output_file.write(&[((binary & 0xFF00) >> 8) as u8])?;
             }
         }
     }

@@ -7,7 +7,8 @@ use crate::errors::TokenTypeError;
 #[derive(Debug, Clone)]
 pub enum FileTokens {
     InstrTokens(InstrTokens),
-    DataTokens(DataTokens)
+    DataTokens(DataTokens),
+    TextTokens(TextTokens)
 }
 
 
@@ -21,12 +22,14 @@ impl FileTokens {
         let null_str = &"null".to_string();
         let self_label = match self {
             FileTokens::InstrTokens(t) => t.label.as_ref().unwrap_or(null_str),
-            FileTokens::DataTokens(t) => t.label.as_ref().unwrap_or(null_str)
+            FileTokens::DataTokens(t) => t.label.as_ref().unwrap_or(null_str),
+            FileTokens::TextTokens(t) => t.label.as_ref().unwrap_or(null_str)
         };
 
         let other_label = match other {
             FileTokens::InstrTokens(t) => t.label.unwrap_or("null".to_string()),
-            FileTokens::DataTokens(t) => t.label.unwrap_or("null".to_string())
+            FileTokens::DataTokens(t) => t.label.unwrap_or("null".to_string()),
+            FileTokens::TextTokens(t) => t.label.unwrap_or("null".to_string())
         };
 
         self_label == &other_label
@@ -38,7 +41,8 @@ impl FileTokens {
     pub fn try_get_instr_tokens(&self) -> Result<InstrTokens, TokenTypeError> {
         match self {
             FileTokens::InstrTokens(t) => Ok(t.clone()),
-            FileTokens::DataTokens(_) => Err(TokenTypeError("Invalid token type detected!".to_string()))
+            FileTokens::DataTokens(_) => Err(TokenTypeError("Invalid token type detected!".to_string())),
+            FileTokens::TextTokens(_) => Err(TokenTypeError("Invalid token type detected!".to_string()))
         }
     }
 
@@ -48,7 +52,19 @@ impl FileTokens {
     pub fn try_get_data_tokens(&self) -> Result<DataTokens, TokenTypeError> {
         match self {
             FileTokens::DataTokens(t) => Ok(t.clone()),
-            FileTokens::InstrTokens(_) => Err(TokenTypeError("Invalid token type detected!".to_string()))
+            FileTokens::InstrTokens(_) => Err(TokenTypeError("Invalid token type detected!".to_string())),
+            FileTokens::TextTokens(_) => Err(TokenTypeError("Invalid token type detected!".to_string()))
+        }
+    }
+
+
+    /// Attempts to get a `TextTokens` from a `FileTokens` enum. Will return a `DataTokens` if the enum
+    /// is of the right type, or a `TokensTypeError` if not.
+    pub fn try_get_text_tokens(&self) -> Result<TextTokens, TokenTypeError> {
+        match self {
+            FileTokens::DataTokens(_) => Err(TokenTypeError("Invalid token type detected!".to_string())),
+            FileTokens::InstrTokens(_) => Err(TokenTypeError("Invalid token type detected!".to_string())),
+            FileTokens::TextTokens(t) => Ok(t.clone())
         }
     }
 }
@@ -122,5 +138,30 @@ impl DataTokens {
 impl fmt::Debug for DataTokens {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}\t{}\t{:04X?}", self.label.clone().unwrap_or("null".to_string()), self.category, self.bytes)
+    }
+}
+
+
+/// Represents the components of a data instruction, including the label, category, and value
+#[derive(Clone)]
+pub struct TextTokens {
+    pub label: Option<String>,
+    pub bytes: Vec<u16>
+}
+
+
+impl TextTokens {
+    pub fn new(label:Option<String>, bytes:Vec<u16>) -> TextTokens {
+        TextTokens {
+            label: label,
+            bytes: bytes
+        }
+    }
+}
+
+
+impl fmt::Debug for TextTokens {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}\t{:04X?}", self.label.clone().unwrap_or("null".to_string()), self.bytes)
     }
 }

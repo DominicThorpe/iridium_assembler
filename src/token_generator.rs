@@ -1,6 +1,6 @@
 use half::f16;
 use crate::validation::*;
-use crate::token_types::{InstrTokens, DataTokens};
+use crate::token_types::*;
 
 
 
@@ -100,20 +100,29 @@ fn get_bytes_array_from_line(category:&str, data:&str) -> Vec<u16> {
 /// Takes a line of assembly representing a data instruction and returns its token equivalent.
 ///
 /// Assumes that the line has already been validated and line is an instruction and not blank.
-pub fn generate_data_tokens(line:&str, prev_label:Option<String>) -> DataTokens {
+pub fn generate_data_tokens(line:&str, prev_label:Option<String>, mode:char) -> DataTokens {
     let label:Option<String> = match line.find(":") {
         Some(index) => Some(line[..index].to_owned()),
-        None => {
-            match prev_label.clone() {
-                Some(l) => Some(l.to_string()),
-                None => None
-            }
-        }
+        None => prev_label
     };
 
-    let category = &validate_data_type(line).unwrap()[1..];
+    let category = &validate_data_type(line, mode).unwrap()[1..];
     DataTokens::new(label, category.to_owned(), get_bytes_array_from_line(category, line))
 }
+
+
+/// Takes a line of assembly representing a text instruction and returns its token equivalent.
+///
+/// Assumes that the line has been validated and is not blank.
+pub fn generate_text_tokens(line:&str, prev_label:Option<String>, mode:char) -> TextTokens {
+    let label:Option<String> = match line.find(":") {
+        Some(index) => Some(line[..index].to_owned()),
+        None => prev_label
+    };
+
+    let category = &validate_data_type(line, mode).unwrap()[1..];
+    TextTokens::new(label, get_bytes_array_from_line(category, line))
+} 
 
 
 /// Takes a string of an integer in binary, decimal, or hexadecimal and returns it. Assumes that the
@@ -306,19 +315,19 @@ mod tests {
 
     #[test]
     fn test_data_token_int() {
-        let tokens_decimal = generate_data_tokens("my_data: .int 50", None);
+        let tokens_decimal = generate_data_tokens("my_data: .int 50", None, 'd');
         assert_eq!(tokens_decimal.label.unwrap_or("null".to_string()), "my_data");
         assert_eq!(tokens_decimal.category, "int");
         assert_eq!(tokens_decimal.bytes[0], 50);
         assert_eq!(tokens_decimal.bytes.len(), 1);
 
-        let tokens_hex = generate_data_tokens("my_data: .int 0b0101", None);
+        let tokens_hex = generate_data_tokens("my_data: .int 0b0101", None, 'd');
         assert_eq!(tokens_hex.label.unwrap_or("null".to_string()), "my_data");
         assert_eq!(tokens_hex.category, "int");
         assert_eq!(tokens_hex.bytes[0], 0b0101);
         assert_eq!(tokens_hex.bytes.len(), 1);
 
-        let tokens_binary = generate_data_tokens("init: .int 0x001A", None);
+        let tokens_binary = generate_data_tokens("init: .int 0x001A", None, 'd');
         assert_eq!(tokens_binary.label.unwrap_or("null".to_string()), "init");
         assert_eq!(tokens_binary.category, "int");
         assert_eq!(tokens_binary.bytes[0], 0x001A);
@@ -328,21 +337,21 @@ mod tests {
 
     #[test]
     fn test_data_token_long() {
-        let tokens_decimal = generate_data_tokens("my_data: .long 650000000", None);
+        let tokens_decimal = generate_data_tokens("my_data: .long 650000000", None, 'd');
         assert_eq!(tokens_decimal.label.unwrap_or("null".to_string()), "my_data");
         assert_eq!(tokens_decimal.category, "long");
         assert_eq!(tokens_decimal.bytes[0], 0x26BE);
         assert_eq!(tokens_decimal.bytes[1], 0x3680);
         assert_eq!(tokens_decimal.bytes.len(), 2);
 
-        let tokens_hex = generate_data_tokens("my_data: .long 0b01010101010101011010101010101010", None);
+        let tokens_hex = generate_data_tokens("my_data: .long 0b01010101010101011010101010101010", None, 'd');
         assert_eq!(tokens_hex.label.unwrap_or("null".to_string()), "my_data");
         assert_eq!(tokens_hex.category, "long");
         assert_eq!(tokens_hex.bytes[0], 0x5555);
         assert_eq!(tokens_hex.bytes[1], 0xAAAA);
         assert_eq!(tokens_hex.bytes.len(), 2);
 
-        let tokens_binary = generate_data_tokens("init: .long 0xFEDCBA98", None);
+        let tokens_binary = generate_data_tokens("init: .long 0xFEDCBA98", None, 'd');
         assert_eq!(tokens_binary.label.unwrap_or("null".to_string()), "init");
         assert_eq!(tokens_binary.category, "long");
         assert_eq!(tokens_binary.bytes[0], 0xFEDC);
@@ -353,7 +362,7 @@ mod tests {
 
     #[test]
     fn test_data_token_half() {
-        let tokens = generate_data_tokens(".half 5.25", Some("prev_label".to_owned()));
+        let tokens = generate_data_tokens(".half 5.25", Some("prev_label".to_owned()), 'd');
         assert_eq!(tokens.label.unwrap_or("null".to_string()), "prev_label");
         assert_eq!(tokens.category, "half");
         assert_eq!(tokens.bytes[0], 0x4540);
@@ -363,7 +372,7 @@ mod tests {
 
     #[test]
     fn test_data_token_float() {
-        let tokens = generate_data_tokens(".float -3104.76171875", Some("prev_label".to_owned()));
+        let tokens = generate_data_tokens(".float -3104.76171875", Some("prev_label".to_owned()), 'd');
         assert_eq!(tokens.label.unwrap_or("null".to_string()), "prev_label");
         assert_eq!(tokens.category, "float");
         assert_eq!(tokens.bytes[0], 0xC542);
@@ -374,7 +383,7 @@ mod tests {
 
     #[test]
     fn test_data_token_char() {
-        let tokens = generate_data_tokens("character: .char 'ß", None);
+        let tokens = generate_data_tokens("character: .char 'ß", None, 'd');
         assert_eq!(tokens.label.unwrap_or("null".to_string()), "character");
         assert_eq!(tokens.category, "char");
         assert_eq!(tokens.bytes[0], 0x00DF);
@@ -384,7 +393,7 @@ mod tests {
 
     #[test]
     fn test_text_exact_length() {
-        let tokens = generate_data_tokens("txt: .text 7 \"Hello!\"", None);
+        let tokens = generate_data_tokens("txt: .text 7 \"Hello!\"", None, 't');
         assert_eq!(tokens.label.unwrap_or("null".to_string()), "txt");
         assert_eq!(tokens.category, "text");
         assert_eq!(tokens.bytes[0], 0x0048);
@@ -397,7 +406,7 @@ mod tests {
 
     #[test]
     fn test_text_non_exact_length() {
-        let tokens = generate_data_tokens("txt: .text 10 \"Hello!\"", None);
+        let tokens = generate_data_tokens("txt: .text 10 \"Hello!\"", None, 't');
         assert_eq!(tokens.label.unwrap_or("null".to_string()), "txt");
         assert_eq!(tokens.category, "text");
         assert_eq!(tokens.bytes[0], 0x0048);
@@ -411,7 +420,7 @@ mod tests {
 
     #[test]
     fn test_text_non_latin_text() {
-        let tokens = generate_data_tokens("chinese: .text 6 \"你好世界!\"", None);
+        let tokens = generate_data_tokens("chinese: .text 6 \"你好世界!\"", None, 't');
         assert_eq!(tokens.label.unwrap_or("null".to_string()), "chinese");
         assert_eq!(tokens.category, "text");
         assert_eq!(tokens.bytes.len(), 6);
@@ -420,7 +429,7 @@ mod tests {
 
     #[test]
     fn test_section_exact_length() {
-        let tokens = generate_data_tokens("data_pts: .section 4 [0x0100, 0b0011, 10, 0x00A4]", None);
+        let tokens = generate_data_tokens("data_pts: .section 4 [0x0100, 0b0011, 10, 0x00A4]", None, 'd');
         assert_eq!(tokens.label.unwrap_or("null".to_string()), "data_pts");
         assert_eq!(tokens.category, "section");
         assert_eq!(tokens.bytes[0], 0x0100);
@@ -433,7 +442,7 @@ mod tests {
 
     #[test]
     fn test_section_non_exact_length() {
-        let tokens = generate_data_tokens("data_pts: .section 6 [0x0100, 0b0011, 10, 0x00A4]", None);
+        let tokens = generate_data_tokens("data_pts: .section 6 [0x0100, 0b0011, 10, 0x00A4]", None, 'd');
         assert_eq!(tokens.label.unwrap_or("null".to_string()), "data_pts");
         assert_eq!(tokens.category, "section");
         assert_eq!(tokens.bytes[3], 0x00A4);
