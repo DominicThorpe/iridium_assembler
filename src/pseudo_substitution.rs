@@ -155,7 +155,6 @@ mod tests {
 
     fn assert_instr_token(token:InstrTokens, operand:String, operand_a:Option<String>, 
         operand_b:Option<String>, operand_c:Option<String>, immediate:Option<u64>, op_label:Option<String>) {
-            println!("Token: {:?}", token);
             assert_eq!(token.opcode, operand);
             assert_eq!(token.operand_a, operand_a);
             assert_eq!(token.operand_b, operand_b);

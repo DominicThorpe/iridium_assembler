@@ -1,39 +1,40 @@
 use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
-use std::collections::HashMap;
 use std::error::Error;
+use phf::phf_map;
 use crate::errors::TokenTypeError;
 use crate::token_types::FileTokens;
 
 
 
+static OPCODE_BINARIES:phf::Map<&'static str, u16> = phf_map!{
+    "NOP"   => 0x0000, "ADD"   => 0x1000, "SUB"   => 0x2000, "ADDI"  => 0x3000, "SUBI"  => 0x4000, 
+    "SLL"   => 0x5000, "SRL"   => 0x6000, "SRA"   => 0x7000, "NAND"  => 0x8000, "OR"    => 0x9000, 
+    "LOAD"  => 0xA000, "STORE" => 0xB000, "MOVUI" => 0xC000, "MOVLI" => 0xD000, "ADDC"  => 0xF000, 
+    "SUBC"  => 0xF100, "JUMP"  => 0xF200, "JAL"   => 0xF300, "CMP"   => 0xF400, "BEQ"   => 0xF500, 
+    "BNE"   => 0xF600, "BLT"   => 0xF700, "BGT"   => 0xF800, "IN"    => 0xF900, "OUT"   => 0xFA00, 
+    "syscall" => 0xFC00,"HALT" => 0xFFFF
+};
+
+static REGISTER_BINARIES:phf::Map<&'static str, u16> = phf_map!{
+    "$zero" => 0x0, "$g0" => 0x1, "$g1" => 0x2, "$g2" => 0x3, "$g3" => 0x4, "$g4" => 0x5, 
+    "$g5"   => 0x6, "$g6" => 0x7, "$g7" => 0x8, "$g8" => 0x9, "$g9" => 0xA, "$ua" => 0xB, 
+    "$sp"   => 0xC, "$fp" => 0xD, "$ra" => 0xE, "$pc" => 0xF
+};
+
+
 /// Takes a token in the form of a `FileTokens` struct and converts it into a vector f bytes which can be written to a file or printed.
 pub fn get_binary_from_tokens(tokens:FileTokens) -> Result<Vec<u16>, TokenTypeError> {
-    let opcode_binaries:HashMap<String, u16> = HashMap::from([
-        ("NOP".to_owned(), 0x0000), ("ADD".to_owned(), 0x1000), ("SUB".to_owned(), 0x2000), ("ADDI".to_owned(), 0x3000), ("SUBI".to_owned(), 0x4000), 
-        ("SLL".to_owned(), 0x5000), ("SRL".to_owned(), 0x6000), ("SRA".to_owned(), 0x7000), ("NAND".to_owned(), 0x8000), ("OR".to_owned(), 0x9000), 
-        ("LOAD".to_owned(), 0xA000), ("STORE".to_owned(), 0xB000), ("MOVUI".to_owned(), 0xC000), ("MOVLI".to_owned(), 0xD000), ("ADDC".to_owned(), 0xF000), 
-        ("SUBC".to_owned(), 0xF100), ("JUMP".to_owned(), 0xF200), ("JAL".to_owned(), 0xF300), ("CMP".to_owned(), 0xF400), ("BEQ".to_owned(), 0xF500), 
-        ("BNE".to_owned(), 0xF600), ("BLT".to_owned(), 0xF700), ("BGT".to_owned(), 0xF800), ("IN".to_owned(), 0xF900), ("OUT".to_owned(), 0xFA00), 
-        ("syscall".to_owned(), 0xFC00), ("HALT".to_owned(), 0xFFFF)
-    ]);
-
-    let register_binaries:HashMap<String, u8> = HashMap::from([
-        ("$zero".to_owned(), 0x0), ("$g0".to_owned(), 0x1), ("$g1".to_owned(), 0x2), ("$g2".to_owned(), 0x3), ("$g3".to_owned(), 0x4), ("$g4".to_owned(), 0x5), 
-        ("$g5".to_owned(), 0x6),   ("$g6".to_owned(), 0x7), ("$g7".to_owned(), 0x8), ("$g8".to_owned(), 0x9), ("$g9".to_owned(), 0xA), ("$ua".to_owned(), 0xB), 
-        ("$sp".to_owned(), 0xC),   ("$fp".to_owned(), 0xD), ("$ra".to_owned(), 0xE), ("$pc".to_owned(), 0xF)
-    ]);
-
     match tokens {
         FileTokens::InstrTokens(t) => {
             let mut binary:u16 = 0x0000;
-            let opcode = *opcode_binaries.get(&t.opcode).unwrap();
+            let opcode = *OPCODE_BINARIES.get(&t.opcode as &str).unwrap();
             binary |= opcode;
 
             // Insert the opcode and first register into the binary instruction based on if the opcode is 4 or 8 bits unless it is a 
             // syscall, in which case skip as there is no register, only immediate
             if opcode != 0xFC00 {
-                let register_a:u16 = *register_binaries.get(&t.clone().operand_a.unwrap_or("$zero".to_owned())).unwrap() as u16;
+                let register_a:u16 = *REGISTER_BINARIES.get(&t.clone().operand_a.unwrap_or("$zero".to_owned()) as &str).unwrap() as u16;
                 if binary & 0xF000 == 0xF000 {
                     binary |= register_a << 4;
                 } else {
@@ -46,22 +47,22 @@ pub fn get_binary_from_tokens(tokens:FileTokens) -> Result<Vec<u16>, TokenTypeEr
                 0xFFFF => { return Ok(vec![0xFFFF]); }, // HALT is all 1s
 
                 0x1000 | 0x2000 | 0x5000 | 0x6000 | 0x7000 | 0x8000 | 0x9000 | 0xA000 | 0xB000 => { // rrr format
-                    binary |= (*register_binaries.get(&t.operand_b.unwrap_or("$zero".to_owned())).unwrap() << 4) as u16;
-                    binary |= *register_binaries.get(&t.operand_c.unwrap_or("$zero".to_owned())).unwrap() as u16;
+                    binary |= (*REGISTER_BINARIES.get(&t.operand_b.unwrap_or("$zero".to_owned()) as &str).unwrap() << 4) as u16;
+                    binary |= *REGISTER_BINARIES.get(&t.operand_c.unwrap_or("$zero".to_owned()) as &str).unwrap() as u16;
                 },
 
                 0x3000 | 0x4000 => { // rri format
-                    binary |= (*register_binaries.get(&t.operand_b.unwrap_or("$zero".to_owned())).unwrap() << 4) as u16;
+                    binary |= (*REGISTER_BINARIES.get(&t.operand_b.unwrap_or("$zero".to_owned()) as &str).unwrap() << 4) as u16;
                     binary |= (t.immediate.unwrap() & 0x000F) as u16; // TODO: this could be unsafe? 
                 },
 
                 0xC000 | 0xD000 => { // rii format
-                    binary |= (*register_binaries.get(&t.operand_b.unwrap_or("$zero".to_owned())).unwrap() << 4) as u16;
+                    binary |= (*REGISTER_BINARIES.get(&t.operand_b.unwrap_or("$zero".to_owned()) as &str).unwrap() << 4) as u16;
                     binary |= (t.immediate.unwrap() & 0x00FF) as u16;
                 },
 
                 0xF000 | 0xF100 | 0xF200 | 0xF300 | 0xF400 | 0xF500 | 0xF600 | 0xF700 | 0xF800 => { // orr format
-                    binary |= *register_binaries.get(&t.operand_b.unwrap_or("$zero".to_owned())).unwrap() as u16;
+                    binary |= *REGISTER_BINARIES.get(&t.operand_b.unwrap_or("$zero".to_owned()) as &str).unwrap() as u16;
                 },
 
                 0xF900 | 0xFA00 => { // ori format
@@ -76,7 +77,6 @@ pub fn get_binary_from_tokens(tokens:FileTokens) -> Result<Vec<u16>, TokenTypeEr
                     return Err(TokenTypeError(format!("{} is not a valid opcode", opcode)));
                 }
             }
-
             return Ok(vec![binary]);
         },
 
@@ -97,7 +97,7 @@ pub fn generate_binary(filename:&str, tokens:&Vec<FileTokens>) -> Result<(), Box
     let mut output_file = BufWriter::new(
         OpenOptions::new().create(true).write(true).open(filename.to_owned()).unwrap());
     let mut text_instrs:Vec<FileTokens> = Vec::new(); // These are for the text section, processed last
-
+    
     for token in tokens {
         let binary_vec = match token {
             FileTokens::InstrTokens(_) => get_binary_from_tokens(token.clone()).unwrap(),

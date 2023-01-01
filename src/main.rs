@@ -17,12 +17,14 @@ mod generate_code;
 /// which can be either `DataTokens` or `InstrTokens`.
 pub fn process_file_into_tokens(input_file:&str) -> Vec<token_types::FileTokens> {
     let mut mode = 'c';
-    let input_file = BufReader::new(OpenOptions::new().read(true).open(input_file.to_owned()).unwrap());
+    let input_file = BufReader::new(OpenOptions::new().read(true).open(input_file.to_owned()).unwrap())
+        .lines()
+        .map(|l| l.unwrap().trim().to_string())
+        .filter(|l| !l.is_empty());
+
     let mut tokens:Vec<token_types::FileTokens> = Vec::new();
     let mut next_label:Option<String> = None;
-    for line_buffer in input_file.lines() {
-        let line = line_buffer.unwrap();
-        let line = line.trim();
+    for line in input_file {
         if line.is_empty() { // skip if line is blank
             continue;
         } else if line == "data:" {
@@ -34,37 +36,20 @@ pub fn process_file_into_tokens(input_file:&str) -> Vec<token_types::FileTokens>
         }
 
         validation::validate_asm_line(&line, mode).unwrap();
+        
+        if line.ends_with(":") {
+            next_label = Some(line[..line.len() - 1].to_owned());
+            continue;
+        }
 
         match mode {
-            'c' => {
-                if line.ends_with(":") {
-                    next_label = Some(line[..line.len() - 1].to_owned());
-                } else {
-                    tokens.push(token_types::FileTokens::InstrTokens(token_generator::generate_instr_tokens(line, next_label.clone())));
-                    next_label = None;
-                }
-            },
-
-            'd' => {
-                if line.ends_with(":") {
-                    next_label = Some(line[..line.len() - 1].to_owned());
-                } else {
-                    tokens.push(token_types::FileTokens::DataTokens(token_generator::generate_data_tokens(line, next_label.clone(), mode)));
-                    next_label = None;
-                }
-            },
-
-            't' => {
-                if line.ends_with(":") {
-                    next_label = Some(line[..line.len() - 1].to_owned());
-                } else {
-                    tokens.push(token_types::FileTokens::TextTokens(token_generator::generate_text_tokens(line, next_label.clone(), mode)));
-                    next_label = None;
-                }
-            },
-
+            'c' => tokens.push(token_types::FileTokens::InstrTokens(token_generator::generate_instr_tokens(&line, next_label.clone()))),
+            'd' => tokens.push(token_types::FileTokens::DataTokens(token_generator::generate_data_tokens(&line, next_label.clone(), mode))),
+            't' => tokens.push(token_types::FileTokens::TextTokens(token_generator::generate_text_tokens(&line, next_label.clone(), mode))),
             _ => panic!("Invalid section mode '{}'", mode)
         }
+
+        next_label = None;
     }
 
     tokens
@@ -102,7 +87,7 @@ fn main() -> Result<(), errors::CmdArgsError> {
     let since = Instant::now();
     let label_table = label_table::generate_label_table(&tokens).unwrap();
     println!("Label table: {:?}", since.elapsed());
-    println!("{:#?}", label_table);
+    // println!("{:#?}", label_table);
 
     let since = Instant::now();
     let tokens = pseudo_substitution::substitute_labels(tokens, &label_table).unwrap();
@@ -112,15 +97,15 @@ fn main() -> Result<(), errors::CmdArgsError> {
     generate_code::generate_binary(&cmd_args[2], &tokens).unwrap();
     println!("Binary Generation: {:?}", since.elapsed());
 
-    let mut sorted_vec:Vec<_> = label_table.iter().collect();
-    sorted_vec.sort_by(|a, b| a.1.cmp(b.1));
-    for (label, line) in sorted_vec {
-        println!("{:<16} {:06X}", label, line);
-    }
+    // let mut sorted_vec:Vec<_> = label_table.iter().collect();
+    // sorted_vec.sort_by(|a, b| a.1.cmp(b.1));
+    // for (label, line) in sorted_vec {
+    //     println!("{:<16} {:06X}", label, line);
+    // }
     
-    for token in &tokens {
-        println!("{:?}", token);
-    }
+    // for token in &tokens {
+    //     println!("{:?}", token);
+    // }
 
     println!("Assembly successful! Took {:?} to process {} lines", now.elapsed(), tokens.len());
 
