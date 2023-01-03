@@ -73,6 +73,7 @@ The available instructions are:
 | IN       | 1111 1001  | ORI  | Rd = input from I/O port given by Imm  | IN $g0, 2           |
 | OUT      | 1111 1010  | ORI  | Output Rd to I/O port given by Imm     | OUT $g0, 2          |
 | syscall  | 1111 1100  | ORI  | ISP given by Imm with args in $g8/9    | syscall 5           |
+| ATOM     | 1111 1101  | ORI  | Delays process switch until next ATOM  | ATOM                |
 | HALT     | 16 1s      | N/A  | Halts execution of process             | HALT                |
 
 Note that the branching instructions (JUMP, JAL, BEQ, BNE, BGT, BLT) can all take a single 32-bit register as an operand as well as 2 16-bit registers. So `JUMP $ra` is a valid instruction, but `JUMP $g5` is not. Furthermore, *\$ua* is not used when the 2nd operand to LOAD and STORE is 32-bits, so in the instruction `LOAD $sp $zero`, the register *$ua* is never changed.
@@ -162,7 +163,7 @@ Sometimes, the programmer may want to add data larger than a 4 or 8-bit immediat
 
 The array types *.text* and *.section* are required to have a length. This length specifies the number of words in RAM to allocate to them, which may be more than is necessary (extra words are set to 0x0000 or the '\0' null character), but not less. The *.text* instruction requires 1 more word than the length of the text for a null character, which denotes the end of the string in memory.
 
-Data instructions MUST GO AFTER A "data:" LABEL which must go after all regular instructions, or the assembler will raise an error. The format of a data instruction in the data section is as follows, note that the data type is always preceeded by a dot, and may be preceeded by a label as well:
+Data instructions **MUST GO AFTER A "data:"** LABEL which must go after all regular instructions, and all text instructions **MUST GO AFTER A "text:" LABEL** which must go after the data and instructions sections, or the assembler will throw an error. The format of a data or text instruction in the data section is as follows, note that the data type is always preceeded by a signle dot, and may be preceeded by a label as well:
 
 ```[<label>:] .<type> [array size] <data>```.
 

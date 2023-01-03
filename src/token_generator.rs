@@ -234,6 +234,22 @@ mod tests {
 
 
     #[test]
+    fn test_token_generation_no_operands() {
+        let tokens = generate_instr_tokens("HALT", None);
+        assert_eq!(tokens.label, None);
+        assert_eq!(tokens.opcode, "HALT");
+        assert_eq!(tokens.operand_a, None);
+        assert_eq!(tokens.op_label.as_ref().unwrap_or(&"none".to_owned()), &"none".to_owned());
+
+        let tokens = generate_instr_tokens("ATOM", None);
+        assert_eq!(tokens.label, None);
+        assert_eq!(tokens.opcode, "ATOM");
+        assert_eq!(tokens.operand_a, None);
+        assert_eq!(tokens.op_label.as_ref().unwrap_or(&"none".to_owned()), &"none".to_owned());
+    }
+
+
+    #[test]
     fn test_instr_token_addi_all_bases() {
         let tokens_decimal = generate_instr_tokens("init: ADDI $g0, $zero, 1", None);
         assert_eq!(*tokens_decimal.immediate.as_ref().unwrap(), 1);

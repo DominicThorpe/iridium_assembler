@@ -325,10 +325,10 @@ fn validate_data_format(line:&str, data_type:&str) -> Result<(), AsmValidationEr
 /// Takes a line of assembly, extracts the opcode from it, and checks that it is a valid opcode. If an 
 /// invalid opcode is found, an `AsmValidationError` will be thrown.
 pub fn validate_opcode(line:&str) -> Result<&str, AsmValidationError> {
-    let valid_opcodes:[&str;28] = [
+    let valid_opcodes:[&str;29] = [
         "ADD", "SUB", "ADDI", "SUBI", "SLL", "SRL", "SRA", "NAND", "OR", "ADDC", "SUBC",
         "LOAD", "STORE", "JUMP", "JAL", "CMP", "BEQ", "BNE", "BLT", "BGT", "NOP", "MOVUI",
-        "IN", "OUT", "syscall", "HALT", "NOP", "MOVLI"
+        "IN", "OUT", "syscall", "HALT", "NOP", "MOVLI", "ATOM"
     ];
 
     // get the opcode and remove any label there may be

@@ -96,15 +96,15 @@ fn main() -> Result<(), errors::CmdArgsError> {
     generate_code::generate_binary(&cmd_args[2], &tokens).unwrap();
     println!("Binary Generation: {:?}", since.elapsed());
 
-    // let mut sorted_vec:Vec<_> = label_table.iter().collect();
-    // sorted_vec.sort_by(|a, b| a.1.cmp(b.1));
-    // for (label, line) in sorted_vec {
-    //     println!("{:<16} {:06X}", label, line);
-    // }
+    let mut sorted_vec:Vec<_> = label_table.iter().collect();
+    sorted_vec.sort_by(|a, b| a.1.cmp(b.1));
+    for (label, line) in sorted_vec {
+        println!("{:<16} {:06X}", label, line);
+    }
     
-    // for token in &tokens {
-    //     println!("{:?}", token);
-    // }
+    for token in &tokens {
+        println!("{:?}", token);
+    }
 
     println!("Assembly successful! Took {:?} to process {} lines", now.elapsed(), tokens.len());
 
