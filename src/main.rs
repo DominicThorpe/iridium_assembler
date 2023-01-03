@@ -20,14 +20,13 @@ pub fn process_file_into_tokens(input_file:&str) -> Vec<token_types::FileTokens>
     let input_file = BufReader::new(OpenOptions::new().read(true).open(input_file.to_owned()).unwrap())
         .lines()
         .map(|l| l.unwrap().trim().to_string())
-        .filter(|l| !l.is_empty());
+        .filter(|l| !l.is_empty())
+        .collect::<Vec<String>>();
 
     let mut tokens:Vec<token_types::FileTokens> = Vec::new();
     let mut next_label:Option<String> = None;
     for line in input_file {
-        if line.is_empty() { // skip if line is blank
-            continue;
-        } else if line == "data:" {
+        if line == "data:" {
             mode = 'd';
             continue;
         } else if line == "text:" {
@@ -43,9 +42,9 @@ pub fn process_file_into_tokens(input_file:&str) -> Vec<token_types::FileTokens>
         }
 
         match mode {
-            'c' => tokens.push(token_types::FileTokens::InstrTokens(token_generator::generate_instr_tokens(&line, next_label.clone()))),
-            'd' => tokens.push(token_types::FileTokens::DataTokens(token_generator::generate_data_tokens(&line, next_label.clone(), mode))),
-            't' => tokens.push(token_types::FileTokens::TextTokens(token_generator::generate_text_tokens(&line, next_label.clone(), mode))),
+            'c' => tokens.push(token_types::FileTokens::InstrTokens(token_generator::generate_instr_tokens(&line, next_label))),
+            'd' => tokens.push(token_types::FileTokens::DataTokens(token_generator::generate_data_tokens(&line, next_label, mode))),
+            't' => tokens.push(token_types::FileTokens::TextTokens(token_generator::generate_text_tokens(&line, next_label, mode))),
             _ => panic!("Invalid section mode '{}'", mode)
         }
 

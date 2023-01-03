@@ -156,31 +156,30 @@ pub fn generate_instr_tokens(line:&str, prev_label:Option<String>) -> InstrToken
     };
 
     let opcode = validate_opcode(&line).unwrap();
-    let operands:Vec<String> = get_operands_from_line(&line, opcode).iter()
-                                                .map(|operand| operand.to_owned())
-                                                .collect();
+    let mut operands:Vec<String> = get_operands_from_line(&line, opcode);
 
     match operands.len() {
         0 => InstrTokens::new(label, opcode.to_owned(), None, None, None, None, None),
         1 => {
             if opcode == "syscall" {
                 return InstrTokens::new(label, opcode.to_owned(), None, None, None, 
-                                                Some(get_int_immediate_from_string(&operands[0]).try_into().unwrap()), None)
+                                                Some(get_int_immediate_from_string(&operands[0])
+                                                .try_into().unwrap()), None)
             }
             
-            InstrTokens::new(label, opcode.to_owned(), Some(operands[0].clone()), None, None, None, None)
+            InstrTokens::new(label, opcode.to_owned(), Some(operands.remove(0)), None, None, None, None)
         },
 
         2 => {
             let tokens:InstrTokens;
             if operands[1].starts_with("$") {
-                tokens = InstrTokens::new(label.clone(), opcode.to_owned(), Some(operands[0].clone()), 
-                                                Some(operands[1].clone()), None, None, None);
+                tokens = InstrTokens::new(label, opcode.to_owned(), Some(operands.remove(0)), 
+                                                Some(operands.remove(0)), None, None, None);
             } else if operands[1].starts_with("@") {
-                tokens = InstrTokens::new(label.clone(), opcode.to_owned(), Some(operands[0].clone()), None, None, 
-                                                None, Some(operands[1].clone()));
+                tokens = InstrTokens::new(label, opcode.to_owned(), Some(operands.remove(0)), None, None, 
+                                                None, Some(operands.remove(0)));
             } else {
-                tokens = InstrTokens::new(label.clone(), opcode.to_owned(), Some(operands[0].clone()), None, None, 
+                tokens = InstrTokens::new(label, opcode.to_owned(), Some(operands.remove(0)), None, None, 
                                                 Some(get_int_immediate_from_string(&operands[1])
                                                         .try_into().unwrap()), None);
             }
@@ -188,23 +187,26 @@ pub fn generate_instr_tokens(line:&str, prev_label:Option<String>) -> InstrToken
             tokens
         },
 
-        4 => InstrTokens::new(label, opcode.to_owned(), Some(operands[0].clone()), 
-                                                Some(operands[1].clone()), 
-                                                Some(operands[2].clone()), None, 
-                                                Some(operands[3].clone())),
+        4 => InstrTokens::new(label, opcode.to_owned(), Some(operands.remove(0)), 
+                                                Some(operands.remove(0)), 
+                                                Some(operands.remove(0)), None, 
+                                                Some(operands.remove(0))),
         3 => { // may or may not contain a label as an operand
-            let mut tokens = InstrTokens::new(label.clone(), opcode.to_owned(), Some(operands[0].clone()), 
-                                                Some(operands[1].clone()), Some(operands[2].clone()), 
-                                                None, None);
+            let tokens:InstrTokens;
             if operands[2].starts_with("@") {
-                tokens = InstrTokens::new(label, opcode.to_owned(), Some(operands[0].clone()), 
-                                                Some(operands[1].clone()), None, None, 
-                                                Some(operands[2].clone()))
+                tokens = InstrTokens::new(label, opcode.to_owned(), Some(operands.remove(0)), 
+                                                Some(operands.remove(0)), None, None, 
+                                                Some(operands.remove(0)))
             } else if !operands[2].starts_with("$") {
-                tokens = InstrTokens::new(label, opcode.to_owned(), Some(operands[0].clone()), 
-                                                Some(operands[1].clone()), None, 
-                                                Some(get_int_immediate_from_string(&operands[2])
+                let operand_c = operands.remove(2);
+                tokens = InstrTokens::new(label, opcode.to_owned(), Some(operands.remove(0)), 
+                                                Some(operands.remove(0)), None, 
+                                                Some(get_int_immediate_from_string(&operand_c)
                                                         .try_into().unwrap()), None)
+            } else {
+                tokens = InstrTokens::new(label, opcode.to_owned(), Some(operands.remove(0)), 
+                                                Some(operands.remove(0)), Some(operands.remove(0)), 
+                                                None, None);
             }
             
             tokens
