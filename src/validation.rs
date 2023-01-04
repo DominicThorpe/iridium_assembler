@@ -325,14 +325,15 @@ fn validate_data_format(line:&str, data_type:&str) -> Result<(), AsmValidationEr
 /// Takes a line of assembly, extracts the opcode from it, and checks that it is a valid opcode. If an 
 /// invalid opcode is found, an `AsmValidationError` will be thrown.
 pub fn validate_opcode(line:&str) -> Result<&str, AsmValidationError> {
-    let valid_opcodes:[&str;29] = [
+    let valid_opcodes:[&str;28] = [
         "ADD", "SUB", "ADDI", "SUBI", "SLL", "SRL", "SRA", "NAND", "OR", "ADDC", "SUBC",
         "LOAD", "STORE", "JUMP", "JAL", "CMP", "BEQ", "BNE", "BLT", "BGT", "NOP", "MOVUI",
-        "IN", "OUT", "syscall", "HALT", "NOP", "MOVLI", "ATOM"
+        "IN", "OUT", "syscall", "HALT", "MOVLI", "ATOM"
     ];
 
     // get the opcode and remove any label there may be
     let opcode:&str = remove_label(line).split(" ").filter(|item| *item != "").collect::<Vec<&str>>()[0];
+    println!("{}", opcode);
     if !valid_opcodes.contains(&opcode) {
         return Err(AsmValidationError(format!("{} is not a valid opcode on line {}", opcode, line)));
     }
@@ -541,7 +542,7 @@ fn validate_operands(line:&str, opcode:&str) -> Result<(), AsmValidationError> {
             validate_int_immediate(&operands[0], 8, false)?;
         },
 
-        "NOP" | "HALT" => { // no operands
+        "NOP" | "ATOM" | "HALT" => { // no operands
             if operands.is_empty() {
                 return Ok(());
             } else {
@@ -1066,5 +1067,11 @@ mod tests {
     #[should_panic]
     fn test_jump_with_invalid_jump_label_char() {
         validate_asm_line("JUMP $g0, $g1, @jump~label", 'c').unwrap();
+    }
+
+
+    #[test]
+    fn test_atom_opcode() {
+        validate_asm_line("my_label: ATOM", 'c').unwrap();
     }
 }
