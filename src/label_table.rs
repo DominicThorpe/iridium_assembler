@@ -9,12 +9,19 @@ use crate::errors::AsmValidationError;
 pub fn generate_label_table(tokens_stream:&Vec<FileTokens>) -> Result<HashMap<String, i64>, AsmValidationError> {
     let mut instr_addr = 0;
     let page_size = 0x1000;
-    let mut data_addr:i64 = page_size;
-    let mut text_addr:i64 = data_addr + page_size;
+    let mut data_addr:i64 = 0;
+    let mut text_addr:i64 = 0;
+    let mut mode:char = 'c';
     let mut label_table:HashMap<String, i64> = HashMap::new();
     for tokens in tokens_stream {
         match tokens {
             FileTokens::DataTokens(t) => {
+                if mode == 'c' {
+                    data_addr += page_size;
+                    text_addr += page_size;
+                    mode = 'd';
+                }
+
                 match &t.label {
                     Some(label) => {
                         if label_table.contains_key(label) {
@@ -40,6 +47,11 @@ pub fn generate_label_table(tokens_stream:&Vec<FileTokens>) -> Result<HashMap<St
             },
 
             FileTokens::TextTokens(t) => {
+                if mode != 't' {
+                    text_addr += page_size;
+                    mode = 't';
+                }
+
                 match &t.label {
                     Some(label) => {
                         if label_table.contains_key(label) {
@@ -141,5 +153,15 @@ mod tests {
     #[should_panic]
     fn test_text_outside_text_section() {
         let _ = process_file_into_tokens("test_files/test_text_outside_section.asm");
+    }
+
+
+    #[test]
+    fn test_text_without_data_section() {
+        let tokens = process_file_into_tokens("test_files/test_text_without_data.asm");
+        let tokens = pseudo_substitution::substitute_pseudo_instrs(tokens);
+        let label_table = label_table::generate_label_table(&tokens).unwrap();
+
+        assert_eq!(label_table.get("directory").unwrap(), &0x1000);
     }
 }
