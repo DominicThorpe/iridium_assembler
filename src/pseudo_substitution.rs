@@ -15,7 +15,7 @@ pub fn substitute_pseudo_instrs(tokens: Vec<FileTokens>) -> Vec<FileTokens> {
                 match &t.op_label {
                     Some(operand) => {
                         if t.opcode == "LOAD" || t.opcode == "STORE" {
-                            new_tokens.push(FileTokens::InstrTokens(InstrTokens::new(None, "MOVLI".to_owned(), t.operand_b.clone(), None, None, None, Some("l".to_string() + &*operand.clone()))));
+                            new_tokens.push(FileTokens::InstrTokens(InstrTokens::new(t.label.to_owned(), "MOVLI".to_owned(), t.operand_b.clone(), None, None, None, Some("l".to_string() + &*operand.clone()))));
                             new_tokens.push(FileTokens::InstrTokens(InstrTokens::new(None, "MOVUI".to_owned(), t.operand_b.clone(), None, None, None, Some("l".to_string() + &*operand.clone()))));
                             new_tokens.push(FileTokens::InstrTokens(InstrTokens::new(None, t.opcode.clone(), t.operand_a.clone(), t.operand_b.clone(), t.operand_c.clone(), None, None)));
                         } else if t.opcode != "MOVLI" && t.opcode != "MOVUI" { // Branch opcodes
