@@ -113,8 +113,8 @@ mod tests {
 
         assert_eq!(label_table.len(), 10);
         assert_eq!(label_table["init"], 0x0000);
-        assert_eq!(label_table["loop"], 0x0005);
-        assert_eq!(label_table["end"], 0x0014);
+        assert_eq!(label_table["loop"], 0x0007);
+        assert_eq!(label_table["end"], 0x0016);
         assert_eq!(label_table["target"], 0x1000);
         assert_eq!(label_table["int_long"], 0x1001);
         assert_eq!(label_table["half_float"], 0x1003);
