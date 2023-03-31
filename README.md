@@ -57,8 +57,8 @@ The available instructions are:
 | SRA      | 0111       | RRR  | Rd = Rs >>> Rt                         | SRA $g0, $g1, $g2   |
 | NAND     | 1000       | RRR  | Rd = ¬(Rs & Rt)                        | NAND $g0, $g1, $g2  |
 | OR       | 1001       | RRR  | Rd = Rs \| Rt                          | OR $g0, $g1, $g2    |
-| LOAD     | 1010       | RRR  | Rd = RAM[$ua + Rs + Rt]                | LOAD $g0, $g1, $g2  |
-| STORE    | 1011       | RRR  | RAM[$ua + Rs + Rt] = Rd                | STORE $g0, $g1, $g2 |
+| LOAD     | 1010       | RRR  | Rd = RAM[Rs + Rt]                      | LOAD $g0, $g1, $g2  |
+| STORE    | 1011       | RRR  | RAM[Rs + Rt] = Rd                      | STORE $g0, $g1, $g2 |
 | MOVUI    | 1100       | RII  | Set upper 8 bits of Rd to Imm          | MOVUI $g0, 100      |
 | MOVLI    | 1101       | RII  | Set lower 8 bits of Rd to Imm          | MOVLI $g0, 100      |
 | ADDC     | 1111 0000  | ORR  | Rd = Rs + carry flag                   | ADDC $g0, $g1       |

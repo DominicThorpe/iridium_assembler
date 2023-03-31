@@ -15,10 +15,8 @@ pub fn substitute_pseudo_instrs(tokens: Vec<FileTokens>) -> Vec<FileTokens> {
                 match &t.op_label {
                     Some(operand) => {
                         if t.opcode == "LOAD" || t.opcode == "STORE" {
-                            new_tokens.push(FileTokens::InstrTokens(InstrTokens::new(t.label.clone(), "MOVLI".to_owned(), Option::from("$ua".to_owned()), None, None, None, Some("u".to_string() + &*operand.clone()))));
-                            new_tokens.push(FileTokens::InstrTokens(InstrTokens::new(None, "MOVUI".to_owned(), Option::from("$ua".to_owned()), None, None, None, Some("u".to_string() + &*operand.clone()))));
-                            new_tokens.push(FileTokens::InstrTokens(InstrTokens::new(None, "MOVLI".to_owned(), t.operand_b.clone(), None, None, None, Some("l".to_string() + &*operand.clone()))));
-                            new_tokens.push(FileTokens::InstrTokens(InstrTokens::new(None, "MOVUI".to_owned(), t.operand_b.clone(), None, None, None, Some("l".to_string() + &*operand.clone()))));
+                            new_tokens.push(FileTokens::InstrTokens(InstrTokens::new(None, "MOVLI".to_owned(), t.operand_b.clone(), None, None, None, Some(operand.clone()))));
+                            new_tokens.push(FileTokens::InstrTokens(InstrTokens::new(None, "MOVUI".to_owned(), t.operand_b.clone(), None, None, None, Some(operand.clone()))));
                             new_tokens.push(FileTokens::InstrTokens(InstrTokens::new(None, t.opcode.clone(), t.operand_a.clone(), t.operand_b.clone(), t.operand_c.clone(), None, None)));
                         } else if t.opcode != "MOVLI" && t.opcode != "MOVUI" { // Branch opcodes
                             new_tokens.push(FileTokens::InstrTokens(InstrTokens::new(t.label.clone(), "MOVLI".to_owned(), t.operand_a.clone(), None, None, None, Some("u".to_string() + &*operand.clone()))));
@@ -174,16 +172,16 @@ mod tests {
         let mut token = subbed_tokens[0].try_get_instr_tokens().unwrap();
         assert_instr_token(token, "ADDI".to_string(), Option::from("$g0".to_string()), Option::from("$zero".to_string()), None, Option::from(10), None);
 
+        token = subbed_tokens[1].try_get_instr_tokens().unwrap();
+        assert_instr_token(token, "MOVLI".to_string(), Option::from("$g6".to_string()), None, None, None, Option::from("@test_1".to_string()));
+
+        token = subbed_tokens[2].try_get_instr_tokens().unwrap();
+        assert_instr_token(token, "MOVUI".to_string(), Option::from("$g6".to_string()), None, None, None, Option::from("@test_1".to_string()));
+
         token = subbed_tokens[3].try_get_instr_tokens().unwrap();
-        assert_instr_token(token, "MOVLI".to_string(), Option::from("$g6".to_string()), None, None, None, Option::from("l@test_1".to_string()));
-
-        token = subbed_tokens[4].try_get_instr_tokens().unwrap();
-        assert_instr_token(token, "MOVUI".to_string(), Option::from("$g6".to_string()), None, None, None, Option::from("l@test_1".to_string()));
-
-        token = subbed_tokens[5].try_get_instr_tokens().unwrap();
         assert_instr_token(token, "LOAD".to_string(), Option::from("$g5".to_string()), Option::from("$g6".to_string()), Option::from("$g7".to_string()), None, None);
 
-        assert_eq!(subbed_tokens.len(), 23);
+        assert_eq!(subbed_tokens.len(), 19);
     }
 
 
@@ -192,19 +190,13 @@ mod tests {
         let tokens = process_file_into_tokens("test_files/test_expand_pseudoinstrs.asm");
         let subbed_tokens = substitute_pseudo_instrs(tokens);
 
-        let mut token = subbed_tokens[7].try_get_instr_tokens().unwrap();
-        assert_instr_token(token, "MOVLI".to_string(), Option::from("$ua".to_string()), None, None, None, Option::from("u@test_2".to_string()));
+        let mut token = subbed_tokens[5].try_get_instr_tokens().unwrap();
+        assert_instr_token(token, "MOVLI".to_string(), Option::from("$g1".to_string()), None, None, None, Option::from("@test_2".to_string()));
 
-        token = subbed_tokens[8].try_get_instr_tokens().unwrap();
-        assert_instr_token(token, "MOVUI".to_string(), Option::from("$ua".to_string()), None, None, None, Option::from("u@test_2".to_string()));
+        token = subbed_tokens[6].try_get_instr_tokens().unwrap();
+        assert_instr_token(token, "MOVUI".to_string(), Option::from("$g1".to_string()), None, None, None, Option::from("@test_2".to_string()));
 
-        token = subbed_tokens[9].try_get_instr_tokens().unwrap();
-        assert_instr_token(token, "MOVLI".to_string(), Option::from("$g1".to_string()), None, None, None, Option::from("l@test_2".to_string()));
-
-        token = subbed_tokens[10].try_get_instr_tokens().unwrap();
-        assert_instr_token(token, "MOVUI".to_string(), Option::from("$g1".to_string()), None, None, None, Option::from("l@test_2".to_string()));
-
-        token = subbed_tokens[11].try_get_instr_tokens().unwrap();
+        token = subbed_tokens[7].try_get_instr_tokens().unwrap();
         assert_instr_token(token, "STORE".to_string(), Option::from("$g0".to_string()), Option::from("$g1".to_string()), Option::from("$g2".to_string()), None, None);
     }
 
@@ -214,19 +206,19 @@ mod tests {
         let tokens = process_file_into_tokens("test_files/test_expand_pseudoinstrs.asm");
         let subbed_tokens = substitute_pseudo_instrs(tokens);
 
-        let mut token = subbed_tokens[13].try_get_instr_tokens().unwrap();
+        let mut token = subbed_tokens[9].try_get_instr_tokens().unwrap();
         assert_instr_token(token, "MOVLI".to_string(), Option::from("$g3".to_string()), None, None, None, Option::from("u@test_3".to_string()));
 
-        token = subbed_tokens[14].try_get_instr_tokens().unwrap();
+        token = subbed_tokens[10].try_get_instr_tokens().unwrap();
         assert_instr_token(token, "MOVUI".to_string(), Option::from("$g3".to_string()), None, None, None, Option::from("u@test_3".to_string()));
 
-        token = subbed_tokens[15].try_get_instr_tokens().unwrap();
+        token = subbed_tokens[11].try_get_instr_tokens().unwrap();
         assert_instr_token(token, "MOVLI".to_string(), Option::from("$g4".to_string()), None, None, None, Option::from("l@test_3".to_string()));
 
-        token = subbed_tokens[16].try_get_instr_tokens().unwrap();
+        token = subbed_tokens[12].try_get_instr_tokens().unwrap();
         assert_instr_token(token, "MOVUI".to_string(), Option::from("$g4".to_string()), None, None, None, Option::from("l@test_3".to_string()));
 
-        token = subbed_tokens[17].try_get_instr_tokens().unwrap();
+        token = subbed_tokens[13].try_get_instr_tokens().unwrap();
         assert_instr_token(token, "BEQ".to_string(), Option::from("$g3".to_string()), Option::from("$g4".to_string()), None, None, None);
     }
 
@@ -236,19 +228,19 @@ mod tests {
         let tokens = process_file_into_tokens("test_files/test_expand_pseudoinstrs.asm");
         let subbed_tokens = substitute_pseudo_instrs(tokens);
 
-        let mut token = subbed_tokens[18].try_get_instr_tokens().unwrap();
+        let mut token = subbed_tokens[14].try_get_instr_tokens().unwrap();
         assert_instr_token(token, "MOVLI".to_string(), Option::from("$g6".to_string()), None, None, None, Option::from("u@test_4".to_string()));
 
-        token = subbed_tokens[19].try_get_instr_tokens().unwrap();
+        token = subbed_tokens[15].try_get_instr_tokens().unwrap();
         assert_instr_token(token, "MOVUI".to_string(), Option::from("$g6".to_string()), None, None, None, Option::from("u@test_4".to_string()));
 
-        token = subbed_tokens[20].try_get_instr_tokens().unwrap();
+        token = subbed_tokens[16].try_get_instr_tokens().unwrap();
         assert_instr_token(token, "MOVLI".to_string(), Option::from("$g7".to_string()), None, None, None, Option::from("l@test_4".to_string()));
 
-        token = subbed_tokens[21].try_get_instr_tokens().unwrap();
+        token = subbed_tokens[17].try_get_instr_tokens().unwrap();
         assert_instr_token(token, "MOVUI".to_string(), Option::from("$g7".to_string()), None, None, None, Option::from("l@test_4".to_string()));
 
-        token = subbed_tokens[22].try_get_instr_tokens().unwrap();
+        token = subbed_tokens[18].try_get_instr_tokens().unwrap();
         assert_instr_token(token, "BGT".to_string(), Option::from("$g6".to_string()), Option::from("$g7".to_string()), None, None, None);
     }
 
@@ -272,47 +264,37 @@ mod tests {
 
         assert_instr_token(
             tokens[2].try_get_instr_tokens().unwrap(), "MOVLI".to_string(), 
-            Option::from("$ua".to_owned()), None, None, Option::from(0), None
-        );
-
-        assert_instr_token(
-            tokens[3].try_get_instr_tokens().unwrap(), "MOVUI".to_string(), 
-            Option::from("$ua".to_owned()), None, None, Option::from(0), None
-        );
-
-        assert_instr_token(
-            tokens[4].try_get_instr_tokens().unwrap(), "MOVLI".to_string(), 
             Option::from("$g8".to_owned()), None, None, Option::from(0), None
         );
 
         assert_instr_token(
-            tokens[5].try_get_instr_tokens().unwrap(), "MOVUI".to_string(), 
+            tokens[3].try_get_instr_tokens().unwrap(), "MOVUI".to_string(), 
             Option::from("$g8".to_owned()), None, None, Option::from(0x10), None
         );
 
         assert_instr_token(
-            tokens[6].try_get_instr_tokens().unwrap(), "LOAD".to_string(), 
+            tokens[4].try_get_instr_tokens().unwrap(), "LOAD".to_string(), 
             Option::from("$g5".to_owned()), Option::from("$g8".to_owned()), 
             Option::from("$g9".to_owned()), None, None
         );
 
         assert_instr_token(
+            tokens[10].try_get_instr_tokens().unwrap(), "MOVLI".to_string(), 
+            Option::from("$g8".to_owned()), None, None, Option::from(0), None
+        );
+
+        assert_instr_token(
+            tokens[11].try_get_instr_tokens().unwrap(), "MOVUI".to_string(), 
+            Option::from("$g8".to_owned()), None, None, Option::from(0), None
+        );
+
+        assert_instr_token(
             tokens[12].try_get_instr_tokens().unwrap(), "MOVLI".to_string(), 
-            Option::from("$g8".to_owned()), None, None, Option::from(0), None
+            Option::from("$g9".to_owned()), None, None, Option::from(20), None
         );
 
         assert_instr_token(
-            tokens[13].try_get_instr_tokens().unwrap(), "MOVUI".to_string(), 
-            Option::from("$g8".to_owned()), None, None, Option::from(0), None
-        );
-
-        assert_instr_token(
-            tokens[14].try_get_instr_tokens().unwrap(), "MOVLI".to_string(), 
-            Option::from("$g9".to_owned()), None, None, Option::from(22), None
-        );
-
-        assert_instr_token(
-            tokens[16].try_get_instr_tokens().unwrap(), "BGT".to_string(), 
+            tokens[14].try_get_instr_tokens().unwrap(), "BGT".to_string(), 
             Option::from("$g8".to_owned()), Option::from("$g9".to_owned()), None, None, None
         );
     }
