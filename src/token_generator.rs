@@ -240,12 +240,6 @@ mod tests {
         assert_eq!(tokens.opcode, "HALT");
         assert_eq!(tokens.operand_a, None);
         assert_eq!(tokens.op_label.as_ref().unwrap_or(&"none".to_owned()), &"none".to_owned());
-
-        let tokens = generate_instr_tokens("ATOM", None);
-        assert_eq!(tokens.label, None);
-        assert_eq!(tokens.opcode, "ATOM");
-        assert_eq!(tokens.operand_a, None);
-        assert_eq!(tokens.op_label.as_ref().unwrap_or(&"none".to_owned()), &"none".to_owned());
     }
 
 

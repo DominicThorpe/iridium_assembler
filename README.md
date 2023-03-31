@@ -73,7 +73,6 @@ The available instructions are:
 | IN       | 1111 1001  | ORI  | Rd = input from I/O port given by Imm  | IN $g0, 2           |
 | OUT      | 1111 1010  | ORI  | Output Rd to I/O port given by Imm     | OUT $g0, 2          |
 | syscall  | 1111 1100  | ORI  | ISP given by Imm with args in $g8/9    | syscall 5           |
-| ATOM     | 1111 1101  | ORI  | Delays process switch until next ATOM  | ATOM                |
 | HALT     | 16 1s      | N/A  | Halts execution of process             | HALT                |
 
 Note that the branching instructions (JUMP, JAL, BEQ, BNE, BGT, BLT) can all take a single 32-bit register as an operand as well as 2 16-bit registers. So `JUMP $ra` is a valid instruction, but `JUMP $g5` is not. Furthermore, *\$ua* is not used when the 2nd operand to LOAD and STORE is 32-bits, so in the instruction `LOAD $sp $zero`, the register *$ua* is never changed.

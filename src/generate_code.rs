@@ -13,7 +13,7 @@ static OPCODE_BINARIES:phf::Map<&'static str, u16> = phf_map!{
     "LOAD"  => 0xA000,   "STORE" => 0xB000, "MOVUI" => 0xC000, "MOVLI" => 0xD000, "ADDC"  => 0xF000, 
     "SUBC"  => 0xF100,   "JUMP"  => 0xF200, "JAL"   => 0xF300, "CMP"   => 0xF400, "BEQ"   => 0xF500, 
     "BNE"   => 0xF600,   "BLT"   => 0xF700, "BGT"   => 0xF800, "IN"    => 0xF900, "OUT"   => 0xFA00, 
-    "syscall" => 0xFC00, "ATOM"  => 0xFD00, "HALT"  => 0xFFFF
+    "syscall" => 0xFC00, "HALT"  => 0xFFFF
 };
 
 static REGISTER_BINARIES:phf::Map<&'static str, u16> = phf_map!{
@@ -43,7 +43,7 @@ pub fn get_binary_from_tokens(tokens:FileTokens) -> Result<Vec<u16>, TokenTypeEr
             }
 
             match opcode {
-                0x0000 | 0xFD00 | 0xFFFF => { // NOP, ATOM, and HALT 
+                0x0000 | 0xFFFF => { // NOP, and HALT 
                     return Ok(vec![opcode]); 
                 },
 
@@ -152,14 +152,6 @@ mod tests {
         let token = FileTokens::InstrTokens(InstrTokens::new(None, "NOP".to_string(), None, None, None, None, None));
         let binary = get_binary_from_tokens(token).unwrap();
         assert_eq!(binary[0], 0x0000);
-    }
-
-
-    #[test]
-    fn test_atom_token() {
-        let token = FileTokens::InstrTokens(InstrTokens::new(None, "ATOM".to_string(), None, None, None, None, None));
-        let binary = get_binary_from_tokens(token).unwrap();
-        assert_eq!(binary[0], 0xFD00);
     }
 
 
