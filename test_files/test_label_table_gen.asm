@@ -10,8 +10,8 @@ loop:
     ADD $g2, $zero, $g1
     
     CMP $g1, $g5
-    BGT $g8, $g9, @end
-    JUMP $g8, $g9, @loop
+    BGT $g8, @end
+    JUMP $g8, @loop
 
 end: HALT
 

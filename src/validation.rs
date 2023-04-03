@@ -494,29 +494,16 @@ fn validate_operands(line:&str, opcode:&str) -> Result<(), AsmValidationError> {
             validate_register(&operands[1])?;
         },
 
-        "JUMP" | "JAL" | "BEQ" | "BNE" | "BLT" | "BGT" => {
+        "JUMP" | "JAL" | "BEQ" | "BNE" | "BLT" | "BGT" => { // require a register and an optional label
             match operands.len() {
-                1 => {
-                    validate_register(&operands[0])?;
-                    if operands[0] != "$sp" && operands[0] != "$fp" && operands[0] != "$ra" && operands[0] != "$pc" {
-                        return Err(AsmValidationError(format!("Incorrect number of operands on line {}", line)));
-                    }
-                },
+                1 => validate_register(&operands[0])?,
 
                 2 => {
                     validate_register(&operands[0])?;
-                    validate_register(&operands[1])?;
+                    validate_label_operand(line, &operands[1])?;
                 },
 
-                3 => {
-                    validate_register(&operands[0])?;
-                    validate_register(&operands[1])?;
-                    validate_label_operand(line, &operands[2])?;
-                },
-
-                _ => {
-                    return Err(AsmValidationError(format!("Incorrect number of operands on line {}", line)));
-                }
+                _ => return Err(AsmValidationError(format!("Incorrect number of operands on line {}", line))),
             }
         }
 
@@ -544,14 +531,12 @@ fn validate_operands(line:&str, opcode:&str) -> Result<(), AsmValidationError> {
         "NOP" | "HALT" => { // no operands
             if operands.is_empty() {
                 return Ok(());
-            } else {
-                return Err(AsmValidationError(format!("Instruction {} takes no arguments", line)));
-            }
+            } 
+            
+            return Err(AsmValidationError(format!("Instruction {} takes no arguments", line)));
         },
 
-        _ => {
-            return Err(AsmValidationError(format!("Invalid opcode: {} on line {}", opcode, line)));
-        }
+        _ => return Err(AsmValidationError(format!("Invalid opcode: {} on line {}", opcode, line)))
     }
 
     Ok(())
@@ -749,40 +734,38 @@ mod tests {
 
 
     #[test]
-    fn test_rro_format_instrs() {
-        validate_asm_line("ADDC $g0, $g1", 'c').unwrap();
-        validate_asm_line("SUBC $g0, $g1", 'c').unwrap();
-        validate_asm_line("JUMP $g0, $g1", 'c').unwrap();
+    fn test_roo_format_instrs() {
+        validate_asm_line("ADDC $g0, $g0", 'c').unwrap();
+        validate_asm_line("SUBC $g0, $g0", 'c').unwrap();
+        validate_asm_line("JUMP $g0", 'c').unwrap();
         validate_asm_line("CMP $g0, $g1", 'c').unwrap();
-        validate_asm_line("JAL $g0, $g1", 'c').unwrap();
-        validate_asm_line("BEQ $g0, $g1", 'c').unwrap();
-        validate_asm_line("BNE $g0, $g1", 'c').unwrap();
-        validate_asm_line("BLT $g0, $g1", 'c').unwrap();
-        validate_asm_line("BGT $g0, $g1", 'c').unwrap();
+        validate_asm_line("JAL $g0", 'c').unwrap();
+        validate_asm_line("BEQ $g0", 'c').unwrap();
+        validate_asm_line("BNE $g0", 'c').unwrap();
+        validate_asm_line("BLT $g0", 'c').unwrap();
+        validate_asm_line("BGT $g0", 'c').unwrap();
         validate_asm_line("IN $g0, $g1", 'c').unwrap();
         validate_asm_line("OUT $g0, $g1", 'c').unwrap();
     }
 
 
     #[test]
-    fn test_orr_format_instrs_one_register() {
+    fn test_roo_format_instrs_one_register() {
         validate_asm_line("JUMP $sp", 'c').unwrap();
-        validate_asm_line("JAL  $sp", 'c').unwrap();
-        validate_asm_line("BEQ  $ra", 'c').unwrap();
-        validate_asm_line("BNE  $pc", 'c').unwrap();
-        validate_asm_line("BLT  $ra", 'c').unwrap();
-        validate_asm_line("BGT  $ra", 'c').unwrap();
+        validate_asm_line("BEQ $ra", 'c').unwrap();
+        validate_asm_line("BNE $g3", 'c').unwrap();
+        validate_asm_line("BLT $g4", 'c').unwrap();
+        validate_asm_line("BGT $g5", 'c').unwrap();
     }
 
     #[test]
     #[should_panic]
-    fn test_orr_format_instrs_one_register_16_bits() {
-        validate_asm_line("JUMP $g0", 'c').unwrap();
+    fn test_roo_format_instrs_two_registers() {
+        validate_asm_line("JUMP $g0, $g1", 'c').unwrap();
     }
 
 
     #[test]
-    #[should_panic]
     fn test_orr_format_instrs_one_register_zero() {
         validate_asm_line("JUMP $zero", 'c').unwrap();
     }
@@ -1028,14 +1011,14 @@ mod tests {
 
     #[test]
     fn test_opcodes_with_jump_label() {
-        validate_asm_line("JUMP $g0, $g1, @jump_label", 'c').unwrap();
-        validate_asm_line("JAL $g0, $g1, @jal_label", 'c').unwrap();
-        validate_asm_line("BEQ $g0, $g1, @beq_label", 'c').unwrap();
-        validate_asm_line("BNE $g0, $g1, @bne_label", 'c').unwrap();
-        validate_asm_line("BLT $g0, $g1, @blt_label", 'c').unwrap();
-        validate_asm_line("BGT $g0, $g1, @bgt_label", 'c').unwrap();
-        validate_asm_line("LOAD $g0, $g1, $g2, @load_label", 'c').unwrap();
-        validate_asm_line("STORE $g0, $g1, $g2, @store_label", 'c').unwrap();
+        validate_asm_line("JUMP $g0, @jump_label", 'c').unwrap();
+        validate_asm_line("JAL $g0, @jal_label", 'c').unwrap();
+        validate_asm_line("BEQ $g0, @beq_label", 'c').unwrap();
+        validate_asm_line("BNE $g0, @bne_label", 'c').unwrap();
+        validate_asm_line("BLT $g0, @blt_label", 'c').unwrap();
+        validate_asm_line("BGT $g0, @bgt_label", 'c').unwrap();
+        validate_asm_line("LOAD $g0, $g2, $g3, @load_label", 'c').unwrap();
+        validate_asm_line("STORE $g0, $g2, $g3, @store_label", 'c').unwrap();
         validate_asm_line("MOVUI $g0, @movui_label", 'c').unwrap();
         validate_asm_line("MOVLI $g0, @movli_label", 'c').unwrap();
     }
@@ -1058,13 +1041,13 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_jump_with_invalid_jump_label() {
-        validate_asm_line("JUMP $g0, $g1, jump_label", 'c').unwrap();
+        validate_asm_line("JUMP $g0, jump_label", 'c').unwrap();
     }
 
 
     #[test]
     #[should_panic]
     fn test_jump_with_invalid_jump_label_char() {
-        validate_asm_line("JUMP $g0, $g1, @jump~label", 'c').unwrap();
+        validate_asm_line("JUMP $g0, @jump~label", 'c').unwrap();
     }
 }

@@ -19,15 +19,14 @@ pub fn substitute_pseudo_instrs(tokens: Vec<FileTokens>) -> Vec<FileTokens> {
                             new_tokens.push(FileTokens::InstrTokens(InstrTokens::new(None, "MOVUI".to_owned(), t.operand_b.clone(), None, None, None, Some(operand.clone()))));
                             new_tokens.push(FileTokens::InstrTokens(InstrTokens::new(None, t.opcode.clone(), t.operand_a.clone(), t.operand_b.clone(), t.operand_c.clone(), None, None)));
                         } else if t.opcode != "MOVLI" && t.opcode != "MOVUI" { // Branch opcodes
-                            new_tokens.push(FileTokens::InstrTokens(InstrTokens::new(t.label.clone(), "MOVLI".to_owned(), t.operand_a.clone(), None, None, None, Some("u".to_string() + &*operand.clone()))));
-                            new_tokens.push(FileTokens::InstrTokens(InstrTokens::new(None, "MOVUI".to_owned(), t.operand_a.clone(), None, None, None, Some("u".to_string() + &*operand.clone()))));
-                            new_tokens.push(FileTokens::InstrTokens(InstrTokens::new(None, "MOVLI".to_owned(), t.operand_b.clone(), None, None, None, Some("l".to_string() + &*operand.clone()))));
-                            new_tokens.push(FileTokens::InstrTokens(InstrTokens::new(None, "MOVUI".to_owned(), t.operand_b.clone(), None, None, None, Some("l".to_string() + &*operand.clone()))));
+                            new_tokens.push(FileTokens::InstrTokens(InstrTokens::new(t.label.clone(), "MOVLI".to_owned(), t.operand_a.clone(), None, None, None, Some(operand.clone()))));
+                            new_tokens.push(FileTokens::InstrTokens(InstrTokens::new(None, "MOVUI".to_owned(), t.operand_a.clone(), None, None, None, Some(operand.clone()))));
                             new_tokens.push(FileTokens::InstrTokens(InstrTokens::new(None, t.opcode.clone(), t.operand_a.clone(), t.operand_b.clone(), t.operand_c.clone(), None, None)));
                         } else {
                             new_tokens.push(token.clone());
                         }
                     },
+
                     None => {
                         if t.opcode == "JUMP" || t.opcode == "BEQ" || t.opcode == "BNE" || t.opcode == "BLT" || t.opcode == "BGT" || t.opcode == "JAL" {
                             match &t.operand_b {
@@ -61,75 +60,19 @@ pub fn substitute_labels(tokens:Vec<FileTokens>, label_table:&HashMap<String, i6
     let mut new_tokens:Vec<FileTokens> = Vec::new();
     for token in tokens {
         match token {
-            FileTokens::DataTokens(t) => {
-                new_tokens.push(FileTokens::DataTokens(t.clone()));
-            },
-
-            FileTokens::TextTokens(t) => {
-                new_tokens.push(FileTokens::TextTokens(t.clone()));
-            },
-
+            FileTokens::DataTokens(t) => new_tokens.push(FileTokens::DataTokens(t.clone())),
+            FileTokens::TextTokens(t) => new_tokens.push(FileTokens::TextTokens(t.clone())),
             FileTokens::InstrTokens(mut t) => {
                 match t.op_label {
                     Some(label) => {
-                        let prefix = match label.chars().collect::<Vec<char>>()[0] {
-                            'u' => 'u',
-                            'l' => 'l',
-                            _ => ' '
+                        let label = label.replace("@", "");
+                        let new_imm:i64 = match t.opcode.as_str() {
+                            "MOVLI" => label_table.get(&label).expect(&format!("The label {} was not found!", label)) & 0x00FF,
+                            "MOVUI" => (label_table.get(&label).expect(&format!("The label {} was not found!", label)) & 0xFF00) >> 8,
+                            opcode => panic!("The instruction {} cannot take label operands!", opcode)
                         };
 
-                        let mut label = label.replace("@", "");
-                        if prefix != ' ' {
-                            label = label[1..].to_string();
-                        }
-
-                        let new_imm:u64;
-                        if t.opcode == "MOVLI" {
-                            new_imm = match label_table.get(&label) {
-                                Some(addr) => {
-                                    let address;
-                                    if prefix == 'u' {
-                                        address = (*addr as u64 & 0x00FF_0000) >> 16;
-                                    } else {
-                                        address = *addr as u64 & 0x0000_00FF;
-                                    }
-
-                                    address
-                                },
-
-                                None => {
-                                    return Err(LabelNotFoundError(format!(
-                                        "The label {} was not found!", label))); 
-                                }
-                            }
-                        }
-
-                        else if t.opcode == "MOVUI" {
-                            new_imm = match label_table.get(&label) {
-                                Some(addr) => {
-                                    let address;
-                                    if prefix == 'u' {
-                                        address = (*addr as u64 & 0xFF00_0000) >> 24;
-                                    } else {
-                                        address = (*addr as u64 & 0x0000_FF00) >> 8;
-                                    }
-
-                                    address
-                                },
-
-                                None => {
-                                    return Err(LabelNotFoundError(format!(
-                                        "The label {} was not found!", label))); 
-                                }
-                            }
-                        }
-
-                        else {
-                            return Err(LabelNotFoundError(format!(
-                                "The instruction {} cannot take label operands!", t.opcode)));
-                        }
-
-                        t.immediate = Option::from(new_imm);
+                        t.immediate = Option::from(new_imm as u64);
                         t.op_label = None;
 
                         new_tokens.push(FileTokens::InstrTokens(t.clone()))
@@ -181,7 +124,7 @@ mod tests {
         token = subbed_tokens[3].try_get_instr_tokens().unwrap();
         assert_instr_token(token, "LOAD".to_string(), Option::from("$g5".to_string()), Option::from("$g6".to_string()), Option::from("$g7".to_string()), None, None);
 
-        assert_eq!(subbed_tokens.len(), 19);
+        assert_eq!(subbed_tokens.len(), 15);
     }
 
 
@@ -207,19 +150,13 @@ mod tests {
         let subbed_tokens = substitute_pseudo_instrs(tokens);
 
         let mut token = subbed_tokens[9].try_get_instr_tokens().unwrap();
-        assert_instr_token(token, "MOVLI".to_string(), Option::from("$g3".to_string()), None, None, None, Option::from("u@test_3".to_string()));
+        assert_instr_token(token, "MOVLI".to_string(), Option::from("$g3".to_string()), None, None, None, Option::from("@test_3".to_string()));
 
         token = subbed_tokens[10].try_get_instr_tokens().unwrap();
-        assert_instr_token(token, "MOVUI".to_string(), Option::from("$g3".to_string()), None, None, None, Option::from("u@test_3".to_string()));
+        assert_instr_token(token, "MOVUI".to_string(), Option::from("$g3".to_string()), None, None, None, Option::from("@test_3".to_string()));
 
         token = subbed_tokens[11].try_get_instr_tokens().unwrap();
-        assert_instr_token(token, "MOVLI".to_string(), Option::from("$g4".to_string()), None, None, None, Option::from("l@test_3".to_string()));
-
-        token = subbed_tokens[12].try_get_instr_tokens().unwrap();
-        assert_instr_token(token, "MOVUI".to_string(), Option::from("$g4".to_string()), None, None, None, Option::from("l@test_3".to_string()));
-
-        token = subbed_tokens[13].try_get_instr_tokens().unwrap();
-        assert_instr_token(token, "BEQ".to_string(), Option::from("$g3".to_string()), Option::from("$g4".to_string()), None, None, None);
+        assert_instr_token(token, "BEQ".to_string(), Option::from("$g3".to_string()), None, None, None, None);
     }
 
 
@@ -228,20 +165,14 @@ mod tests {
         let tokens = process_file_into_tokens("test_files/test_expand_pseudoinstrs.asm");
         let subbed_tokens = substitute_pseudo_instrs(tokens);
 
-        let mut token = subbed_tokens[14].try_get_instr_tokens().unwrap();
-        assert_instr_token(token, "MOVLI".to_string(), Option::from("$g6".to_string()), None, None, None, Option::from("u@test_4".to_string()));
+        let mut token = subbed_tokens[12].try_get_instr_tokens().unwrap();
+        assert_instr_token(token, "MOVLI".to_string(), Option::from("$g6".to_string()), None, None, None, Option::from("@test_4".to_string()));
 
-        token = subbed_tokens[15].try_get_instr_tokens().unwrap();
-        assert_instr_token(token, "MOVUI".to_string(), Option::from("$g6".to_string()), None, None, None, Option::from("u@test_4".to_string()));
+        token = subbed_tokens[13].try_get_instr_tokens().unwrap();
+        assert_instr_token(token, "MOVUI".to_string(), Option::from("$g6".to_string()), None, None, None, Option::from("@test_4".to_string()));
 
-        token = subbed_tokens[16].try_get_instr_tokens().unwrap();
-        assert_instr_token(token, "MOVLI".to_string(), Option::from("$g7".to_string()), None, None, None, Option::from("l@test_4".to_string()));
-
-        token = subbed_tokens[17].try_get_instr_tokens().unwrap();
-        assert_instr_token(token, "MOVUI".to_string(), Option::from("$g7".to_string()), None, None, None, Option::from("l@test_4".to_string()));
-
-        token = subbed_tokens[18].try_get_instr_tokens().unwrap();
-        assert_instr_token(token, "BGT".to_string(), Option::from("$g6".to_string()), Option::from("$g7".to_string()), None, None, None);
+        token = subbed_tokens[14].try_get_instr_tokens().unwrap();
+        assert_instr_token(token, "BGT".to_string(), Option::from("$g6".to_string()), None, None, None, None);
     }
 
 
@@ -262,6 +193,8 @@ mod tests {
         let label_table = generate_label_table(&tokens).unwrap();
         let tokens = substitute_labels(tokens, &label_table).unwrap();
 
+        println!("Table:\n{:#?}", label_table);
+
         assert_instr_token(
             tokens[2].try_get_instr_tokens().unwrap(), "MOVLI".to_string(), 
             Option::from("$g8".to_owned()), None, None, Option::from(0), None
@@ -269,7 +202,7 @@ mod tests {
 
         assert_instr_token(
             tokens[3].try_get_instr_tokens().unwrap(), "MOVUI".to_string(), 
-            Option::from("$g8".to_owned()), None, None, Option::from(0x10), None
+            Option::from("$g8".to_owned()), None, None, Option::from(16), None
         );
 
         assert_instr_token(
@@ -280,7 +213,7 @@ mod tests {
 
         assert_instr_token(
             tokens[10].try_get_instr_tokens().unwrap(), "MOVLI".to_string(), 
-            Option::from("$g8".to_owned()), None, None, Option::from(0), None
+            Option::from("$g8".to_owned()), None, None, Option::from(16), None
         );
 
         assert_instr_token(
@@ -289,13 +222,8 @@ mod tests {
         );
 
         assert_instr_token(
-            tokens[12].try_get_instr_tokens().unwrap(), "MOVLI".to_string(), 
-            Option::from("$g9".to_owned()), None, None, Option::from(20), None
-        );
-
-        assert_instr_token(
-            tokens[14].try_get_instr_tokens().unwrap(), "BGT".to_string(), 
-            Option::from("$g8".to_owned()), Option::from("$g9".to_owned()), None, None, None
+            tokens[12].try_get_instr_tokens().unwrap(), "BGT".to_string(), 
+            Option::from("$g8".to_owned()), None, None, None, None
         );
     }
 
